@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import get_settings
 from app.db import init_db
 from app.api import router
+from app.services.cleanup import CleanupService
 
 
 @asynccontextmanager
@@ -26,9 +27,13 @@ async def lifespan(app: FastAPI):
     print(f"🚀 Quick-Survey 启动成功")
     print(f"📍 API 文档: http://{settings.server.host}:{settings.server.port}/docs")
     
+    # 启动后台清理任务
+    CleanupService.start_background_task()
+    
     yield
     
     # 关闭时
+    CleanupService.stop_background_task()
     print("👋 Quick-Survey 已关闭")
 
 

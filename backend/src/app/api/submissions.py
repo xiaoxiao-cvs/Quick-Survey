@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from app.core import get_current_user, CurrentUser
 from app.schemas import ApiResponse, SubmissionReview
-from app.services import SubmissionService, SurveyService
+from app.services import SubmissionService, SurveyService, CleanupService
 from app.models import Question
 
 
@@ -13,6 +13,38 @@ router = APIRouter(prefix="/submissions", tags=["提交管理"])
 
 
 # 注意：stats 路由必须放在 /{submission_id} 之前，避免路由冲突
+@router.post("/cleanup", response_model=ApiResponse)
+async def run_cleanup(
+    user: CurrentUser = Depends(get_current_user),
+):
+    """
+    手动触发清理任务
+    清理已审核提交的答案数据和图片文件，保留提交记录元数据
+    """
+    stats = await CleanupService.run_cleanup()
+    
+    # 格式化释放的空间
+    bytes_freed = stats["bytes_freed"]
+    if bytes_freed >= 1024 * 1024:
+        freed_str = f"{bytes_freed / (1024 * 1024):.2f} MB"
+    elif bytes_freed >= 1024:
+        freed_str = f"{bytes_freed / 1024:.2f} KB"
+    else:
+        freed_str = f"{bytes_freed} bytes"
+    
+    return ApiResponse(
+        success=True,
+        data={
+            "submissions_cleaned": stats["submissions_cleaned"],
+            "answers_deleted": stats["answers_deleted"],
+            "files_deleted": stats["files_deleted"],
+            "orphan_files_deleted": stats["orphan_files_deleted"],
+            "space_freed": freed_str,
+        },
+        message=f"清理完成，释放空间: {freed_str}"
+    )
+
+
 @router.get("/stats/overview", response_model=ApiResponse)
 async def get_stats(
     db: AsyncSession = Depends(get_db),

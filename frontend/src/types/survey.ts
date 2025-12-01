@@ -27,6 +27,7 @@ export interface Question {
 
 // 公开问卷响应
 export interface PublicSurvey {
+  code: string
   title: string
   description?: string
   questions: Question[]

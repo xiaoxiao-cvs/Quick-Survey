@@ -8,13 +8,13 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   return (
-    <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
+    <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-300">
       {/* Header */}
       <motion.header
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.4, ease: 'easeOut' }}
-        className="sticky top-0 z-50 backdrop-blur-xl bg-background/80 border-b border-border/40"
+        className="sticky top-0 z-50 backdrop-blur-xl bg-background/80 border-b border-border/40 shrink-0"
       >
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <motion.div
@@ -33,7 +33,7 @@ export function Layout({ children }: LayoutProps) {
       </motion.header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-6 md:py-10">
+      <main className="container mx-auto px-4 py-6 md:py-10 flex-1 flex flex-col">
         {children}
       </main>
 
@@ -42,7 +42,7 @@ export function Layout({ children }: LayoutProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5, duration: 0.4 }}
-        className="border-t border-border/40 py-6"
+        className="border-t border-border/40 py-6 shrink-0"
       >
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
           <p>© {new Date().getFullYear()} Quick Survey. All rights reserved.</p>

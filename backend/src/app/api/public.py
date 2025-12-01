@@ -9,6 +9,41 @@ from app.services import SurveyService, SubmissionService, FileService
 router = APIRouter(prefix="/public", tags=["公开接口"])
 
 
+@router.get("/survey/active", response_model=ApiResponse)
+async def get_active_survey(
+    db: AsyncSession = Depends(get_db),
+):
+    """获取当前激活的问卷（公开，无需认证）"""
+    survey = await SurveyService.get_active_survey(db)
+    
+    if not survey:
+        raise HTTPException(status_code=404, detail="当前没有可用的问卷")
+    
+    # 获取问题（可能是随机的）
+    questions = await SubmissionService.get_random_questions(survey)
+    
+    return ApiResponse(
+        success=True,
+        data={
+            "code": survey.code,
+            "title": survey.title,
+            "description": survey.description,
+            "questions": [
+                {
+                    "id": q.id,
+                    "title": q.title,
+                    "description": q.description,
+                    "type": q.type,
+                    "options": q.options,
+                    "is_required": q.is_required,
+                    "validation": q.validation,
+                }
+                for q in questions
+            ],
+        }
+    )
+
+
 @router.get("/surveys/{code}", response_model=ApiResponse)
 async def get_public_survey(
     code: str,
@@ -29,6 +64,7 @@ async def get_public_survey(
     return ApiResponse(
         success=True,
         data={
+            "code": survey.code,
             "title": survey.title,
             "description": survey.description,
             "questions": [

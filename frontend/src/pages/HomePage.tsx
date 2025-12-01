@@ -1,44 +1,55 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { FileText, ArrowRight, Loader2 } from 'lucide-react'
+import { FileText, ArrowRight, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getSurveyByCode } from '@/lib/api'
+import { getActiveSurvey } from '@/lib/api'
 import { toast } from 'sonner'
 
 export function HomePage() {
-  const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
-  const [shake, setShake] = useState(false)
+  const [checking, setChecking] = useState(true)
+  const [surveyInfo, setSurveyInfo] = useState<{ code: string; title: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!code.trim()) {
-      setShake(true)
-      setTimeout(() => setShake(false), 500)
-      toast.error('请输入问卷码')
+  // 检查是否有可用问卷
+  useEffect(() => {
+    const checkActiveSurvey = async () => {
+      try {
+        setChecking(true)
+        const data = await getActiveSurvey()
+        setSurveyInfo({ code: data.code, title: data.title })
+        setError(null)
+      } catch {
+        setError('当前没有可用的问卷')
+        setSurveyInfo(null)
+      } finally {
+        setChecking(false)
+      }
+    }
+    checkActiveSurvey()
+  }, [])
+
+  const handleEnterSurvey = async () => {
+    if (!surveyInfo) {
+      toast.error('当前没有可用的问卷')
       return
     }
 
     setLoading(true)
     try {
-      await getSurveyByCode(code.trim())
-      navigate(`/survey/${code.trim()}`)
+      navigate(`/survey/${surveyInfo.code}`)
     } catch {
-      setShake(true)
-      setTimeout(() => setShake(false), 500)
-      toast.error('问卷不存在或已关闭')
+      toast.error('进入问卷失败')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center">
+    <div className="flex-1 flex items-center justify-center">
       <motion.div
         initial={{ opacity: 0, y: 40, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -75,31 +86,32 @@ export function HomePage() {
             >
               <CardTitle className="text-2xl font-bold">开始填写问卷</CardTitle>
               <CardDescription className="mt-2 text-base">
-                输入问卷码开始填写
+                {checking ? '正在检查问卷...' : surveyInfo ? surveyInfo.title : '暂无可用问卷'}
               </CardDescription>
             </motion.div>
           </CardHeader>
 
           <CardContent className="relative pt-4 pb-8 px-8">
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-6">
               <motion.div
-                animate={shake ? { x: [0, -10, 10, -10, 10, 0] } : {}}
-                transition={{ duration: 0.4 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5, duration: 0.4 }}
               >
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5, duration: 0.4 }}
-                >
-                  <Input
-                    type="text"
-                    placeholder="请输入问卷码"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    className="h-14 text-lg text-center rounded-2xl border-border/50 bg-background/50 focus:ring-2 focus:ring-primary/20 transition-all duration-300"
-                    disabled={loading}
-                  />
-                </motion.div>
+                {checking ? (
+                  <div className="h-14 flex items-center justify-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : error ? (
+                  <div className="h-14 flex items-center justify-center gap-2 text-muted-foreground">
+                    <AlertCircle className="w-5 h-5" />
+                    <span>{error}</span>
+                  </div>
+                ) : (
+                  <div className="h-14 flex items-center justify-center text-muted-foreground">
+                    <span>点击下方按钮开始填写</span>
+                  </div>
+                )}
               </motion.div>
 
               <motion.div
@@ -108,13 +120,14 @@ export function HomePage() {
                 transition={{ delay: 0.6, duration: 0.4 }}
               >
                 <Button
-                  type="submit"
+                  type="button"
                   size="lg"
                   className="w-full h-14 text-lg font-medium rounded-2xl transition-all duration-300"
-                  disabled={loading}
+                  disabled={loading || checking || !surveyInfo}
+                  onClick={handleEnterSurvey}
                 >
                   <AnimatePresence mode="wait">
-                    {loading ? (
+                    {loading || checking ? (
                       <motion.div
                         key="loading"
                         initial={{ opacity: 0, scale: 0.8 }}
@@ -123,7 +136,7 @@ export function HomePage() {
                         className="flex items-center gap-2"
                       >
                         <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>加载中...</span>
+                        <span>{checking ? '检查中...' : '加载中...'}</span>
                       </motion.div>
                     ) : (
                       <motion.div
@@ -140,7 +153,7 @@ export function HomePage() {
                   </AnimatePresence>
                 </Button>
               </motion.div>
-            </form>
+            </div>
           </CardContent>
         </Card>
 
@@ -151,7 +164,7 @@ export function HomePage() {
           transition={{ delay: 0.8, duration: 0.4 }}
           className="text-center text-sm text-muted-foreground mt-6"
         >
-          请从管理员处获取问卷码
+          问卷由管理员配置
         </motion.p>
       </motion.div>
     </div>

@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, X, Loader2, Image as ImageIcon, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { uploadImage } from '@/lib/api'
+import { uploadImage, getImageUrl } from '@/lib/api'
 import { toast } from 'sonner'
 
 interface ImageUploaderProps {
@@ -100,7 +100,7 @@ export function ImageUploader({ value, onChange, maxImages = 5 }: ImageUploaderP
                 className="relative aspect-square rounded-2xl overflow-hidden group"
               >
                 <img
-                  src={url}
+                  src={getImageUrl(url)}
                   alt={`上传图片 ${index + 1}`}
                   className="w-full h-full object-cover"
                 />

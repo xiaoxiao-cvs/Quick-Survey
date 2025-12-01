@@ -13,11 +13,6 @@ from app.schemas import (
 )
 
 
-def generate_code(length: int = 8) -> str:
-    """生成随机访问码"""
-    return secrets.token_urlsafe(length)[:length]
-
-
 class SurveyService:
     """问卷服务"""
     
@@ -28,10 +23,12 @@ class SurveyService:
         created_by: Optional[int] = None
     ) -> Survey:
         """创建问卷"""
+        # 使用问卷标题生成简单的访问码
+        code = secrets.token_urlsafe(8)[:8]
         survey = Survey(
             title=data.title,
             description=data.description,
-            code=generate_code(),
+            code=code,
             is_random=data.is_random,
             random_count=data.random_count,
             created_by=created_by,
@@ -72,6 +69,18 @@ class SurveyService:
             select(Survey)
             .options(selectinload(Survey.questions))
             .where(Survey.code == code)
+        )
+        return result.scalar_one_or_none()
+    
+    @staticmethod
+    async def get_active_survey(db: AsyncSession) -> Optional[Survey]:
+        """获取当前激活的问卷（返回第一个激活的问卷）"""
+        result = await db.execute(
+            select(Survey)
+            .options(selectinload(Survey.questions))
+            .where(Survey.is_active == True)
+            .order_by(Survey.created_at.desc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
     

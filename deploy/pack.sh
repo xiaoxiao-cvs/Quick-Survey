@@ -23,8 +23,8 @@ tar -czvf "$OUTPUT_DIR/backend.tar.gz" \
     --exclude='__pycache__' \
     --exclude='.venv' \
     --exclude='venv' \
-    --exclude='data/*.db' \
-    --exclude='data/survey.db' \
+    --exclude='data' \
+    --exclude='uploads' \
     --exclude='.git' \
     --exclude='.idea' \
     --exclude='.vscode' \

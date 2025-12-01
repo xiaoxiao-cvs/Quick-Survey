@@ -1,0 +1,351 @@
+{
+	"info": {
+		"_postman_id": "quick-survey-api",
+		"name": "Quick-Survey API",
+		"description": "问卷调查系统 API - 用于玩家白名单审核的问卷平台",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string",
+			"description": "JWT Token (从 Java 端登录获取)"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "健康检查",
+			"item": [
+				{
+					"name": "健康检查",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/health",
+							"host": ["{{baseUrl}}"],
+							"path": ["health"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "问卷管理",
+			"item": [
+				{
+					"name": "创建问卷",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"白名单申请问卷\",\n    \"description\": \"请认真填写以下问题\",\n    \"is_random\": false,\n    \"random_count\": null,\n    \"questions\": [\n        {\n            \"title\": \"你的游戏名是什么？\",\n            \"description\": \"请填写你的 Minecraft 游戏名\",\n            \"type\": \"text\",\n            \"is_required\": true,\n            \"order\": 0,\n            \"validation\": {\n                \"min_length\": 3,\n                \"max_length\": 16\n            }\n        },\n        {\n            \"title\": \"你是从哪里知道我们服务器的？\",\n            \"type\": \"single\",\n            \"is_required\": true,\n            \"order\": 1,\n            \"options\": [\n                {\"value\": \"A\", \"label\": \"B站\"},\n                {\"value\": \"B\", \"label\": \"朋友推荐\"},\n                {\"value\": \"C\", \"label\": \"MC论坛\"},\n                {\"value\": \"D\", \"label\": \"其他\"}  \n            ]\n        },\n        {\n            \"title\": \"你擅长哪些游戏内容？（可多选）\",\n            \"type\": \"multiple\",\n            \"is_required\": true,\n            \"order\": 2,\n            \"options\": [\n                {\"value\": \"A\", \"label\": \"建筑\"},\n                {\"value\": \"B\", \"label\": \"红石\"},\n                {\"value\": \"C\", \"label\": \"生存冒险\"},\n                {\"value\": \"D\", \"label\": \"PVP\"}\n            ]\n        },\n        {\n            \"title\": \"你是否同意遵守服务器规则？\",\n            \"type\": \"boolean\",\n            \"is_required\": true,\n            \"order\": 3\n        },\n        {\n            \"title\": \"请上传你之前的建筑截图\",\n            \"description\": \"展示你的建筑能力\",\n            \"type\": \"image\",\n            \"is_required\": false,\n            \"order\": 4,\n            \"validation\": {\n                \"max_images\": 3\n            }\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/surveys",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "surveys"]
+						}
+					}
+				},
+				{
+					"name": "获取问卷列表",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/surveys?page=1&size=20",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "surveys"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "size", "value": "20"},
+								{"key": "search", "value": "", "disabled": true}
+							]
+						}
+					}
+				},
+				{
+					"name": "获取问卷详情",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/surveys/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "surveys", "1"]
+						}
+					}
+				},
+				{
+					"name": "更新问卷",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"更新后的问卷标题\",\n    \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/surveys/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "surveys", "1"]
+						}
+					}
+				},
+				{
+					"name": "删除问卷",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/surveys/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "surveys", "1"]
+						}
+					}
+				},
+				{
+					"name": "添加问题",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"新增的问题\",\n    \"type\": \"text\",\n    \"is_required\": true,\n    \"order\": 10\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/surveys/1/questions",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "surveys", "1", "questions"]
+						}
+					}
+				},
+				{
+					"name": "更新问题",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"更新后的问题标题\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/surveys/1/questions/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "surveys", "1", "questions", "1"]
+						}
+					}
+				},
+				{
+					"name": "删除问题",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/surveys/1/questions/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "surveys", "1", "questions", "1"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "提交管理",
+			"item": [
+				{
+					"name": "获取提交列表",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/submissions?page=1&size=20",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "submissions"],
+							"query": [
+								{"key": "page", "value": "1"},
+								{"key": "size", "value": "20"},
+								{"key": "status", "value": "pending", "disabled": true},
+								{"key": "survey_id", "value": "1", "disabled": true},
+								{"key": "player_name", "value": "", "disabled": true}
+							]
+						}
+					}
+				},
+				{
+					"name": "获取提交详情",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/submissions/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "submissions", "1"]
+						}
+					}
+				},
+				{
+					"name": "审核通过",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"approved\",\n    \"review_note\": \"审核通过，欢迎加入服务器！\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/submissions/1/review",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "submissions", "1", "review"]
+						}
+					}
+				},
+				{
+					"name": "审核拒绝",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"rejected\",\n    \"review_note\": \"回答不符合要求，请重新填写\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/submissions/1/review",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "submissions", "1", "review"]
+						}
+					}
+				},
+				{
+					"name": "获取统计概览",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/submissions/stats/overview",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "submissions", "stats", "overview"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "公开接口",
+			"item": [
+				{
+					"name": "获取问卷（玩家端）",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/public/surveys/abc12345",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "public", "surveys", "abc12345"]
+						}
+					}
+				},
+				{
+					"name": "提交问卷（玩家端）",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"player_name\": \"Steve\",\n    \"answers\": [\n        {\n            \"question_id\": 1,\n            \"content\": {\"text\": \"Steve\"}\n        },\n        {\n            \"question_id\": 2,\n            \"content\": {\"value\": \"A\"}\n        },\n        {\n            \"question_id\": 3,\n            \"content\": {\"values\": [\"A\", \"C\"]}\n        },\n        {\n            \"question_id\": 4,\n            \"content\": {\"value\": true}\n        },\n        {\n            \"question_id\": 5,\n            \"content\": {\"images\": [\"/uploads/20231201_abc123.jpg\"]}\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/public/surveys/abc12345/submit",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "public", "surveys", "abc12345", "submit"]
+						}
+					}
+				},
+				{
+					"name": "上传图片",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": ""
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/public/upload",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "public", "upload"]
+						}
+					}
+				}
+			]
+		}
+	]
+}

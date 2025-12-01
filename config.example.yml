@@ -1,0 +1,31 @@
+# Quick-Survey 配置文件
+# 复制此文件为 config.yml 并修改配置
+
+# 服务器配置
+server:
+  host: "0.0.0.0"
+  port: 8000
+  debug: false
+
+# 数据库配置
+database:
+  # SQLite 数据库路径
+  url: "sqlite+aiosqlite:///./data/survey.db"
+
+# 认证配置 (与 Java 端共享)
+auth:
+  # 从 Java 端 config.yml 复制 admin-password 的值
+  admin_password: "your-admin-password-here"
+
+# 文件上传配置
+upload:
+  # 上传文件存储目录
+  path: "./uploads"
+  # 允许的图片类型
+  allowed_types: ["image/jpeg", "image/png", "image/gif", "image/webp"]
+  # 最大文件大小 (MB)
+  max_size_mb: 10
+
+# CORS 配置
+cors:
+  allowed_origins: ["*"]

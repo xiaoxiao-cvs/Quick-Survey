@@ -1,0 +1,71 @@
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+from app.core.config import get_settings
+from app.db import init_db
+from app.api import router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    # 启动时
+    settings = get_settings()
+    
+    # 确保数据目录存在
+    Path("data").mkdir(exist_ok=True)
+    Path(settings.upload.path).mkdir(parents=True, exist_ok=True)
+    
+    # 初始化数据库
+    await init_db()
+    
+    print(f"🚀 Quick-Survey 启动成功")
+    print(f"📍 API 文档: http://{settings.server.host}:{settings.server.port}/docs")
+    
+    yield
+    
+    # 关闭时
+    print("👋 Quick-Survey 已关闭")
+
+
+def create_app() -> FastAPI:
+    """创建 FastAPI 应用"""
+    settings = get_settings()
+    
+    app = FastAPI(
+        title="Quick-Survey API",
+        description="问卷调查系统 API",
+        version="0.1.0",
+        lifespan=lifespan,
+    )
+    
+    # CORS 中间件
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors.allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    # 静态文件（上传的图片）
+    upload_path = Path(settings.upload.path)
+    upload_path.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=str(upload_path)), name="uploads")
+    
+    # 注册路由
+    app.include_router(router)
+    
+    # 健康检查
+    @app.get("/health")
+    async def health_check():
+        return {"status": "ok", "service": "quick-survey"}
+    
+    return app
+
+
+app = create_app()

@@ -1,9 +1,14 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Text, Boolean, Integer, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+
+
+def utc_now() -> datetime:
+    """获取当前 UTC 时间（兼容 Python 3.12+）"""
+    return datetime.now(timezone.utc)
 
 
 class Survey(Base):
@@ -23,8 +28,8 @@ class Survey(Base):
     random_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 随机抽取题目数量
     
     # 时间戳
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
     created_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 创建者 admin_id
     
     # 关系
@@ -57,7 +62,7 @@ class Question(Base):
     validation: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     
     # 时间戳
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     
     # 关系
     survey: Mapped["Survey"] = relationship("Survey", back_populates="questions")
@@ -75,14 +80,18 @@ class Submission(Base):
     player_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)  # 玩家名
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)  # IP地址
     
+    # 时间记录
+    fill_duration: Mapped[Optional[float]] = mapped_column(nullable=True)  # 填写耗时（秒）
+    first_viewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # 管理界面首次查看时间
+    
     # 审核状态
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, approved, rejected
-    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # 审核时间
     reviewed_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 审核者 admin_id
     review_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # 审核备注
     
     # 时间戳
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)  # 提交时间
     
     # 关系
     survey: Mapped["Survey"] = relationship("Survey", back_populates="submissions")
@@ -106,7 +115,7 @@ class Answer(Base):
     content: Mapped[dict] = mapped_column(JSON, nullable=False)
     
     # 时间戳
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     
     # 关系
     submission: Mapped["Submission"] = relationship("Submission", back_populates="answers")
@@ -130,4 +139,4 @@ class UploadedFile(Base):
     submission_id: Mapped[Optional[int]] = mapped_column(ForeignKey("submissions.id"), nullable=True)
     
     # 时间戳
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

@@ -12,6 +12,28 @@ from app.models import Question
 router = APIRouter(prefix="/submissions", tags=["提交管理"])
 
 
+# 注意：stats 路由必须放在 /{submission_id} 之前，避免路由冲突
+@router.get("/stats/overview", response_model=ApiResponse)
+async def get_stats(
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """获取统计概览"""
+    _, pending_count = await SubmissionService.get_submissions(db, 1, 1, "pending")
+    _, approved_count = await SubmissionService.get_submissions(db, 1, 1, "approved")
+    _, rejected_count = await SubmissionService.get_submissions(db, 1, 1, "rejected")
+    
+    return ApiResponse(
+        success=True,
+        data={
+            "pending": pending_count,
+            "approved": approved_count,
+            "rejected": rejected_count,
+            "total": pending_count + approved_count + rejected_count,
+        }
+    )
+
+
 @router.get("", response_model=ApiResponse)
 async def get_submissions(
     page: int = Query(1, ge=1),
@@ -58,7 +80,8 @@ async def get_submission(
     user: CurrentUser = Depends(get_current_user),
 ):
     """获取提交详情"""
-    submission = await SubmissionService.get_submission_by_id(db, submission_id)
+    # 获取提交并标记首次查看时间
+    submission = await SubmissionService.get_submission_by_id(db, submission_id, mark_viewed=True)
     if not submission:
         raise HTTPException(status_code=404, detail="提交不存在")
     
@@ -85,6 +108,8 @@ async def get_submission(
             "survey_title": submission.survey.title if submission.survey else "",
             "player_name": submission.player_name,
             "ip_address": submission.ip_address,
+            "fill_duration": submission.fill_duration,  # 填写耗时
+            "first_viewed_at": submission.first_viewed_at.isoformat() if submission.first_viewed_at else None,  # 首次查看时间
             "status": submission.status,
             "review_note": submission.review_note,
             "answers": answers,
@@ -118,31 +143,5 @@ async def review_submission(
             "id": submission.id,
             "status": submission.status,
             "message": "审核成功",
-        }
-    )
-
-
-@router.get("/stats/overview", response_model=ApiResponse)
-async def get_stats(
-    db: AsyncSession = Depends(get_db),
-    user: CurrentUser = Depends(get_current_user),
-):
-    """获取统计概览"""
-    pending, _ = await SubmissionService.get_submissions(db, 1, 1, "pending")
-    approved, _ = await SubmissionService.get_submissions(db, 1, 1, "approved")
-    rejected, _ = await SubmissionService.get_submissions(db, 1, 1, "rejected")
-    
-    # 重新获取总数
-    _, pending_count = await SubmissionService.get_submissions(db, 1, 1, "pending")
-    _, approved_count = await SubmissionService.get_submissions(db, 1, 1, "approved")
-    _, rejected_count = await SubmissionService.get_submissions(db, 1, 1, "rejected")
-    
-    return ApiResponse(
-        success=True,
-        data={
-            "pending": pending_count,
-            "approved": approved_count,
-            "rejected": rejected_count,
-            "total": pending_count + approved_count + rejected_count,
         }
     )

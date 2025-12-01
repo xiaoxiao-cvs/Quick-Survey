@@ -4,6 +4,11 @@ import { ThemeProvider } from '@/providers/ThemeProvider'
 import { Layout } from '@/components/Layout'
 import { HomePage } from '@/pages/HomePage'
 import { SurveyPage } from '@/pages/SurveyPage'
+import { preloadTurnstile } from '@/lib/turnstile-preload'
+
+// 应用启动时预加载 Turnstile 脚本
+// 这样用户进入问卷页面时，验证组件已经准备好了
+preloadTurnstile()
 
 function App() {
   return (

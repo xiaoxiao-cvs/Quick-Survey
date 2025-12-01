@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getSurveyByCode, submitSurvey } from '@/lib/api'
-import type { PublicSurvey, Question, AnswerSubmit } from '@/types/survey'
+import { getSurveyByCode, submitSurvey, getSecurityConfig } from '@/lib/api'
+import type { PublicSurvey, Question, AnswerSubmit, SecurityConfig } from '@/types/survey'
 import { toast } from 'sonner'
 import { QuestionCard } from '@/components/survey/QuestionCard'
 import { ConfirmDialog } from '@/components/survey/ConfirmDialog'
@@ -27,15 +27,25 @@ export function SurveyPage() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [direction, setDirection] = useState<'next' | 'prev'>('next')
+  
+  // 安全相关状态
+  const [securityConfig, setSecurityConfig] = useState<SecurityConfig | null>(null)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [startTime] = useState<number>(() => Date.now() / 1000) // 记录开始时间（秒）
 
   useEffect(() => {
-    const fetchSurvey = async () => {
+    const fetchData = async () => {
       if (!code) return
 
       try {
         setLoading(true)
-        const data = await getSurveyByCode(code)
-        setSurvey(data)
+        // 并行获取问卷和安全配置
+        const [surveyData, securityData] = await Promise.all([
+          getSurveyByCode(code),
+          getSecurityConfig().catch(() => null), // 安全配置获取失败不阻塞
+        ])
+        setSurvey(surveyData)
+        setSecurityConfig(securityData)
       } catch {
         setError('问卷不存在或已关闭')
       } finally {
@@ -43,7 +53,7 @@ export function SurveyPage() {
       }
     }
 
-    fetchSurvey()
+    fetchData()
   }, [code])
 
   const currentQuestion = survey?.questions[currentIndex]
@@ -118,6 +128,12 @@ export function SurveyPage() {
       return
     }
 
+    // 检查 Turnstile 验证（如果启用）
+    if (securityConfig?.turnstile_enabled && !turnstileToken) {
+      toast.error('请完成安全验证')
+      return
+    }
+
     setSubmitting(true)
     try {
       const submitData = {
@@ -126,13 +142,17 @@ export function SurveyPage() {
           question_id: questionId,
           content,
         })),
+        // 安全相关字段
+        turnstile_token: turnstileToken || undefined,
+        start_time: startTime,
       }
 
       await submitSurvey(code, submitData)
       setSubmitted(true)
       setShowConfirm(false)
     } catch (err) {
-      toast.error('提交失败，请稍后重试')
+      const errorMessage = err instanceof Error ? err.message : '提交失败，请稍后重试'
+      toast.error(errorMessage)
     } finally {
       setSubmitting(false)
     }
@@ -361,6 +381,10 @@ export function SurveyPage() {
         onPlayerNameChange={setPlayerName}
         onSubmit={handleSubmit}
         submitting={submitting}
+        turnstileEnabled={securityConfig?.turnstile_enabled}
+        turnstileSiteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY}
+        turnstileVerified={!!turnstileToken}
+        onTurnstileVerify={setTurnstileToken}
       />
     </div>
   )

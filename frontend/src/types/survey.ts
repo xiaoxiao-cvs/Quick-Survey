@@ -48,6 +48,16 @@ export interface AnswerSubmit {
 export interface SubmissionCreate {
   player_name: string
   answers: AnswerSubmit[]
+  // 安全相关字段
+  turnstile_token?: string
+  start_time?: number
+}
+
+// 安全配置
+export interface SecurityConfig {
+  turnstile_enabled: boolean
+  time_check_enabled: boolean
+  min_submit_time: number
 }
 
 // API 响应

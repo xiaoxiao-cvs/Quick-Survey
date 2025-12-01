@@ -29,3 +29,26 @@ upload:
 # CORS 配置
 cors:
   allowed_origins: ["*"]
+
+# 安全配置
+security:
+  # Cloudflare Turnstile 配置
+  turnstile:
+    # 是否启用 Turnstile 验证
+    enabled: false
+    # Turnstile Secret Key (从 Cloudflare Dashboard 获取)
+    secret_key: ""
+  
+  # IP 提交限制
+  rate_limit:
+    # 是否启用 IP 限制
+    enabled: true
+    # 同一 IP 每天最大提交次数
+    max_submissions_per_day: 2
+  
+  # 提交时间检测
+  time_check:
+    # 是否启用时间检测
+    enabled: true
+    # 最小填写时间（秒），低于此时间视为可疑
+    min_submit_time: 10

@@ -1,8 +1,8 @@
 import secrets
 import random
 from typing import Optional
-from datetime import datetime
-from sqlalchemy import select, func, delete
+from datetime import datetime, timezone
+from sqlalchemy import select, func, delete, String, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -123,7 +123,7 @@ class SurveyService:
         for field, value in update_data.items():
             setattr(survey, field, value)
         
-        survey.updated_at = datetime.utcnow()
+        survey.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(survey)
         return survey
@@ -221,12 +221,14 @@ class SubmissionService:
         survey: Survey,
         data: SubmissionCreate,
         ip_address: Optional[str] = None,
+        fill_duration: Optional[float] = None,
     ) -> Submission:
         """创建提交"""
         submission = Submission(
             survey_id=survey.id,
             player_name=data.player_name,
             ip_address=ip_address,
+            fill_duration=fill_duration,
             status="pending",
         )
         
@@ -244,8 +246,19 @@ class SubmissionService:
         return submission
     
     @staticmethod
-    async def get_submission_by_id(db: AsyncSession, submission_id: int) -> Optional[Submission]:
-        """通过 ID 获取提交"""
+    async def get_submission_by_id(
+        db: AsyncSession, 
+        submission_id: int,
+        mark_viewed: bool = False,
+    ) -> Optional[Submission]:
+        """
+        通过 ID 获取提交
+        
+        Args:
+            db: 数据库会话
+            submission_id: 提交 ID
+            mark_viewed: 是否标记首次查看时间
+        """
         result = await db.execute(
             select(Submission)
             .options(
@@ -254,7 +267,15 @@ class SubmissionService:
             )
             .where(Submission.id == submission_id)
         )
-        return result.scalar_one_or_none()
+        submission = result.scalar_one_or_none()
+        
+        # 如果需要标记首次查看时间，且之前未查看过
+        if submission and mark_viewed and submission.first_viewed_at is None:
+            submission.first_viewed_at = datetime.now(timezone.utc)
+            await db.commit()
+            await db.refresh(submission)
+        
+        return submission
     
     @staticmethod
     async def get_submissions(
@@ -305,7 +326,7 @@ class SubmissionService:
         submission.status = data.status
         submission.review_note = data.review_note
         submission.reviewed_by = reviewed_by
-        submission.reviewed_at = datetime.utcnow()
+        submission.reviewed_at = datetime.now(timezone.utc)
         
         await db.commit()
         await db.refresh(submission)
@@ -321,3 +342,63 @@ class SubmissionService:
             questions = random.sample(questions, count)
         
         return sorted(questions, key=lambda q: q.order)
+    
+    @staticmethod
+    async def query_submissions_public(
+        db: AsyncSession,
+        player_name: Optional[str] = None,
+        qq: Optional[str] = None,
+        limit: int = 10,
+    ) -> list[Submission]:
+        """
+        公开查询提交记录（用于玩家查询自己的问卷状态）
+        
+        Args:
+            db: 数据库会话
+            player_name: 游戏名称（精确匹配）
+            qq: QQ号（在答案中搜索）
+            limit: 最大返回数量
+        
+        Returns:
+            匹配的提交记录列表
+        """
+        results = []
+        
+        # 1. 按玩家名精确匹配
+        if player_name:
+            query = (
+                select(Submission)
+                .options(selectinload(Submission.survey))
+                .where(Submission.player_name == player_name)
+                .order_by(Submission.created_at.desc())
+                .limit(limit)
+            )
+            result = await db.execute(query)
+            results.extend(result.scalars().all())
+        
+        # 2. 按 QQ 号在答案中搜索（SQLite JSON 查询）
+        if qq and len(results) < limit:
+            # 在答案的 content 字段中搜索包含 QQ 号的记录
+            # content 格式可能是 {"text": "123456789"} 或 {"value": "123456789"}
+            remaining = limit - len(results)
+            existing_ids = {s.id for s in results}
+            
+            # 使用 LIKE 在 JSON 字段中搜索（SQLite 兼容）
+            query = (
+                select(Submission)
+                .options(selectinload(Submission.survey))
+                .join(Answer, Answer.submission_id == Submission.id)
+                .where(
+                    and_(
+                        Answer.content.cast(String).contains(qq),
+                        Submission.id.notin_(existing_ids) if existing_ids else True
+                    )
+                )
+                .distinct()
+                .order_by(Submission.created_at.desc())
+                .limit(remaining)
+            )
+            result = await db.execute(query)
+            results.extend(result.scalars().all())
+        
+        return results

@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+import re
+from pydantic import BaseModel, Field, field_validator
 
 
 # ==================== 通用响应 ====================
@@ -149,6 +150,21 @@ class SubmissionCreate(BaseModel):
     """创建提交"""
     player_name: str = Field(..., min_length=1, max_length=64)
     answers: list[AnswerSubmit]
+    # 安全相关字段
+    turnstile_token: Optional[str] = None  # Cloudflare Turnstile token
+    start_time: Optional[float] = None  # 开始填写时间戳（秒）
+    
+    @field_validator('player_name')
+    @classmethod
+    def sanitize_player_name(cls, v: str) -> str:
+        """清理玩家名称中的潜在恶意字符"""
+        # 移除 HTML 标签和脚本
+        v = re.sub(r'<[^>]*>', '', v)
+        # 移除 JavaScript 事件处理器
+        v = re.sub(r'on\w+\s*=', '', v, flags=re.IGNORECASE)
+        # 移除潜在的 SQL 注入字符（基础防护，SQLAlchemy 已有参数化查询）
+        v = v.replace(';', '').replace('--', '')
+        return v.strip()
 
 
 class AnswerResponse(BaseModel):

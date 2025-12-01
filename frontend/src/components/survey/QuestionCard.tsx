@@ -78,6 +78,9 @@ export function QuestionCard({ question, value, onChange, index }: QuestionCardP
         )
 
       case 'boolean':
+        // 使用 undefined 作为初始状态，只有明确选择后才有值
+        const boolValue = value?.value as boolean | undefined
+        const hasSelected = boolValue !== undefined
         return (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -88,21 +91,21 @@ export function QuestionCard({ question, value, onChange, index }: QuestionCardP
             <Label
               htmlFor="boolean-switch"
               className={`text-lg font-medium transition-colors ${
-                value?.value === false ? 'text-foreground' : 'text-muted-foreground'
+                hasSelected && boolValue === false ? 'text-foreground' : 'text-muted-foreground'
               }`}
             >
               否
             </Label>
             <Switch
               id="boolean-switch"
-              checked={value?.value as boolean || false}
+              checked={boolValue === true}
               onCheckedChange={(checked) => onChange({ value: checked })}
               className="scale-125"
             />
             <Label
               htmlFor="boolean-switch"
               className={`text-lg font-medium transition-colors ${
-                value?.value === true ? 'text-foreground' : 'text-muted-foreground'
+                hasSelected && boolValue === true ? 'text-foreground' : 'text-muted-foreground'
               }`}
             >
               是

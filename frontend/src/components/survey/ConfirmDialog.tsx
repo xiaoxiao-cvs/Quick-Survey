@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Loader2, User } from 'lucide-react'
+import { Send, Loader2, User, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Turnstile } from '@/components/survey/Turnstile'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -19,6 +20,11 @@ interface ConfirmDialogProps {
   onPlayerNameChange: (name: string) => void
   onSubmit: () => void
   submitting: boolean
+  // Turnstile 相关
+  turnstileEnabled?: boolean
+  turnstileSiteKey?: string
+  turnstileVerified?: boolean
+  onTurnstileVerify?: (token: string) => void
 }
 
 export function ConfirmDialog({
@@ -28,7 +34,13 @@ export function ConfirmDialog({
   onPlayerNameChange,
   onSubmit,
   submitting,
+  turnstileEnabled = false,
+  turnstileSiteKey,
+  turnstileVerified = false,
+  onTurnstileVerify,
 }: ConfirmDialogProps) {
+  const canSubmit = playerName.trim() && (!turnstileEnabled || turnstileVerified)
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md rounded-3xl">
@@ -69,6 +81,28 @@ export function ConfirmDialog({
                 disabled={submitting}
               />
             </div>
+
+            {/* Turnstile 验证 */}
+            {turnstileEnabled && turnstileSiteKey && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="space-y-2"
+              >
+                <Label className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4" />
+                  安全验证
+                </Label>
+                <div className="flex justify-center">
+                  <Turnstile
+                    siteKey={turnstileSiteKey}
+                    onVerify={onTurnstileVerify || (() => {})}
+                    theme="auto"
+                  />
+                </div>
+              </motion.div>
+            )}
           </motion.div>
 
           <DialogFooter className="gap-3 sm:gap-3">
@@ -82,7 +116,7 @@ export function ConfirmDialog({
             </Button>
             <Button
               onClick={onSubmit}
-              disabled={submitting || !playerName.trim()}
+              disabled={submitting || !canSubmit}
               className="rounded-xl flex-1"
             >
               <AnimatePresence mode="wait">

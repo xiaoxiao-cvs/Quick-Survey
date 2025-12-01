@@ -9,3 +9,4 @@ aiofiles>=23.2.0
 pillow>=10.1.0
 pyyaml>=6.0
 greenlet>=3.0.0
+httpx>=0.25.0

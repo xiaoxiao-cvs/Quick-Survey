@@ -1,0 +1,45 @@
+"""活动日志 API"""
+from typing import Optional
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db import get_db
+from app.schemas import ApiResponse
+from app.services import ActivityService
+
+
+router = APIRouter(prefix="/activities", tags=["活动日志"])
+
+
+@router.get("", response_model=ApiResponse)
+async def get_activities(
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    action: Optional[str] = Query(default=None, description="筛选操作类型: submit, approved, rejected"),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取活动日志列表"""
+    logs, total = await ActivityService.get_recent_activities(
+        db, limit=limit, offset=offset, action=action
+    )
+    
+    return ApiResponse(
+        success=True,
+        data={
+            "logs": [
+                {
+                    "id": log.id,
+                    "action": log.action,
+                    "player_name": log.player_name,
+                    "operator": log.operator,
+                    "submission_id": log.submission_id,
+                    "note": log.note,
+                    "created_at": log.created_at.isoformat() if log.created_at else None,
+                }
+                for log in logs
+            ],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
+    )

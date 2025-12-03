@@ -141,3 +141,28 @@ class UploadedFile(Base):
     
     # 时间戳
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class ActivityLog(Base):
+    """活动日志"""
+    __tablename__ = "activity_logs"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    
+    # 活动类型: submit (提交问卷), approved (审核通过), rejected (审核拒绝)
+    action: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    
+    # 目标玩家名
+    player_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    
+    # 操作者（审核人用户名，提交时为空）
+    operator: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    
+    # 关联的提交 ID
+    submission_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    
+    # 备注
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # 时间戳
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)

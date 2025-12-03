@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.schemas import ApiResponse, SubmissionCreate, PublicSurveyResponse
-from app.services import SurveyService, SubmissionService, FileService
+from app.services import SurveyService, SubmissionService, FileService, ActivityService
 from app.core import (
     verify_turnstile,
     check_ip_rate_limit,
@@ -146,20 +146,39 @@ async def submit_survey(
                 detail=f"无效的问题 ID: {answer.question_id}"
             )
     
-    # 检查必填问题
-    required_questions = {q.id for q in survey.questions if q.is_required}
-    answered_questions = {a.question_id for a in data.answers}
-    missing = required_questions - answered_questions
-    if missing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"缺少必填问题的答案: {list(missing)}"
-        )
+    # 检查必填问题（仅对非随机问卷进行完整检查）
+    # 对于随机问卷，前端只收到部分题目，无法在后端验证完整性
+    if not survey.is_random:
+        required_questions = {q.id for q in survey.questions if q.is_required}
+        answered_questions = {a.question_id for a in data.answers}
+        missing = required_questions - answered_questions
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"缺少必填问题的答案: {list(missing)}"
+            )
+    else:
+        # 对于随机问卷，只验证用户回答的必填题是否都有内容
+        answered_question_ids = {a.question_id for a in data.answers}
+        question_map = {q.id: q for q in survey.questions}
+        for answer in data.answers:
+            question = question_map.get(answer.question_id)
+            if question and question.is_required:
+                # 检查必填题是否有有效内容
+                content = answer.content
+                if not content:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"必填问题未作答: {question.title}"
+                    )
     
     # 创建提交（包含填写耗时）
     submission = await SubmissionService.create_submission(
         db, survey, data, ip_address, fill_duration
     )
+    
+    # 记录活动日志
+    await ActivityService.log_submit(db, data.player_name, submission.id)
     
     # 记录 IP 提交（用于频率限制）
     await record_ip_submission(ip_address, code)

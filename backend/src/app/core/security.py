@@ -47,8 +47,13 @@ async def verify_turnstile(token: str, ip: Optional[str] = None) -> bool:
             )
             result = response.json()
             
+            # 添加调试日志
+            import logging
+            logging.info(f"[Turnstile] 验证结果: {result}")
+            
             if not result.get("success"):
                 error_codes = result.get("error-codes", [])
+                logging.warning(f"[Turnstile] 验证失败: {error_codes}")
                 raise HTTPException(
                     status_code=400, 
                     detail=f"安全验证失败: {', '.join(error_codes) if error_codes else '未知错误'}"

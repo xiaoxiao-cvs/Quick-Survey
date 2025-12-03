@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from app.core import get_current_user, CurrentUser
 from app.schemas import ApiResponse, SubmissionReview
-from app.services import SubmissionService, SurveyService, CleanupService
+from app.services import SubmissionService, SurveyService, CleanupService, ActivityService
 from app.models import Question
 
 
@@ -168,7 +168,18 @@ async def review_submission(
     if submission.status != "pending":
         raise HTTPException(status_code=400, detail="该提交已被审核")
     
+    player_name = submission.player_name
     submission = await SubmissionService.review_submission(db, submission, data, user.id)
+    
+    # 记录活动日志
+    await ActivityService.log_review(
+        db,
+        player_name=player_name,
+        submission_id=submission_id,
+        status=data.status,
+        operator=user.username,
+        note=data.review_note,
+    )
     
     return ApiResponse(
         success=True,

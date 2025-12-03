@@ -129,6 +129,7 @@ async def get_submission(
             "question_id": answer.question_id,
             "question_title": question.title if question else "",
             "question_type": question.type if question else "",
+            "question_options": question.options if question else None,  # 选项列表，用于前端渲染
             "content": answer.content,
         })
     

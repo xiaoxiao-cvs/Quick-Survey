@@ -44,6 +44,7 @@ class QuestionCreate(BaseModel):
     type: str = Field(..., pattern="^(single|multiple|boolean|text|image)$")
     options: Optional[list[QuestionOptionSchema]] = None
     is_required: bool = True
+    is_pinned: bool = False  # 是否保留（随机抽题时始终出现）
     order: int = 0
     validation: Optional[QuestionValidationSchema] = None
 
@@ -55,6 +56,7 @@ class QuestionUpdate(BaseModel):
     type: Optional[str] = Field(None, pattern="^(single|multiple|boolean|text|image)$")
     options: Optional[list[QuestionOptionSchema]] = None
     is_required: Optional[bool] = None
+    is_pinned: Optional[bool] = None  # 是否保留
     order: Optional[int] = None
     validation: Optional[QuestionValidationSchema] = None
 
@@ -67,6 +69,7 @@ class QuestionResponse(BaseModel):
     type: str
     options: Optional[list[QuestionOptionSchema]]
     is_required: bool
+    is_pinned: bool  # 是否保留
     order: int
     validation: Optional[QuestionValidationSchema]
     

@@ -21,6 +21,19 @@ from app.services import SurveyService, QuestionService
 router = APIRouter(prefix="/surveys", tags=["问卷管理"])
 
 
+@router.get("/stats/overview", response_model=ApiResponse)
+async def get_survey_stats(
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
+    """获取问卷统计概览"""
+    stats = await SurveyService.get_survey_stats(db)
+    return ApiResponse(
+        success=True,
+        data=stats
+    )
+
+
 @router.post("", response_model=ApiResponse)
 async def create_survey(
     data: SurveyCreate,
@@ -44,11 +57,12 @@ async def get_surveys(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
+    is_active: Optional[bool] = None,
     db: AsyncSession = Depends(get_db),
     user: CurrentUser = Depends(get_current_user),
 ):
     """获取问卷列表"""
-    surveys, total = await SurveyService.get_surveys(db, page, size, search)
+    surveys, total = await SurveyService.get_surveys(db, page, size, search, is_active)
     
     items = []
     for survey in surveys:
@@ -111,6 +125,7 @@ async def get_survey(
                     "type": q.type,
                     "options": q.options,
                     "is_required": q.is_required,
+                    "is_pinned": q.is_pinned,
                     "order": q.order,
                     "validation": q.validation,
                 }
@@ -171,6 +186,9 @@ async def add_question(
     user: CurrentUser = Depends(get_current_user),
 ):
     """添加问题"""
+    # DEBUG: 打印接收到的数据
+    print(f"[DEBUG] add_question received: is_pinned={data.is_pinned}, data={data.model_dump()}")
+    
     survey = await SurveyService.get_survey_by_id(db, survey_id)
     if not survey:
         raise HTTPException(status_code=404, detail="问卷不存在")
@@ -216,7 +234,7 @@ async def delete_question(
     user: CurrentUser = Depends(get_current_user),
 ):
     """删除问题"""
-    question = await QuestionService.get_question_by_id(db, question_id)
+    question = await QuestionService.get_question_by_id(db, question_id, load_answers=True)
     if not question or question.survey_id != survey_id:
         raise HTTPException(status_code=404, detail="问题不存在")
     

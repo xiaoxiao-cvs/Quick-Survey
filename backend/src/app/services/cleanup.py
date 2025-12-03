@@ -11,6 +11,7 @@ from typing import Optional
 
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db import async_session_maker
 from app.models import Submission, Answer, UploadedFile
@@ -47,7 +48,10 @@ class CleanupService:
         }
         
         # 查找已审核的提交（状态为 approved 或 rejected）
-        query = select(Submission).where(
+        # 使用 selectinload 预加载 answers 关系，避免异步懒加载问题
+        query = select(Submission).options(
+            selectinload(Submission.answers)
+        ).where(
             and_(
                 Submission.status.in_(["approved", "rejected"]),
                 Submission.reviewed_at.isnot(None),

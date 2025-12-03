@@ -34,7 +34,7 @@ class Survey(Base):
     
     # 关系
     questions: Mapped[list["Question"]] = relationship("Question", back_populates="survey", cascade="all, delete-orphan")
-    submissions: Mapped[list["Submission"]] = relationship("Submission", back_populates="survey")
+    submissions: Mapped[list["Submission"]] = relationship("Submission", back_populates="survey", cascade="all, delete-orphan")
 
 
 class Question(Base):
@@ -55,6 +55,7 @@ class Question(Base):
     
     # 配置
     is_required: Mapped[bool] = mapped_column(Boolean, default=True)  # 是否必填
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False)  # 是否保留（随机抽题时始终出现）
     order: Mapped[int] = mapped_column(Integer, default=0)  # 排序
     
     # 验证规则 (JSON)
@@ -66,7 +67,7 @@ class Question(Base):
     
     # 关系
     survey: Mapped["Survey"] = relationship("Survey", back_populates="questions")
-    answers: Mapped[list["Answer"]] = relationship("Answer", back_populates="question")
+    answers: Mapped[list["Answer"]] = relationship("Answer", back_populates="question", cascade="all, delete-orphan")
 
 
 class Submission(Base):
@@ -74,7 +75,7 @@ class Submission(Base):
     __tablename__ = "submissions"
     
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    survey_id: Mapped[int] = mapped_column(ForeignKey("surveys.id"), nullable=False)
+    survey_id: Mapped[int] = mapped_column(ForeignKey("surveys.id", ondelete="CASCADE"), nullable=False)
     
     # 提交者信息
     player_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)  # 玩家名
@@ -104,7 +105,7 @@ class Answer(Base):
     
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     submission_id: Mapped[int] = mapped_column(ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False)
-    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id"), nullable=False)
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), nullable=False)
     
     # 回答内容 (JSON)
     # 单选: {"value": "A"}

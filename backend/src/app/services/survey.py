@@ -90,6 +90,7 @@ class SurveyService:
         page: int = 1,
         size: int = 20,
         search: Optional[str] = None,
+        is_active: Optional[bool] = None,
     ) -> tuple[list[Survey], int]:
         """获取问卷列表"""
         query = select(Survey)
@@ -98,6 +99,10 @@ class SurveyService:
         if search:
             query = query.where(Survey.title.contains(search))
             count_query = count_query.where(Survey.title.contains(search))
+        
+        if is_active is not None:
+            query = query.where(Survey.is_active == is_active)
+            count_query = count_query.where(Survey.is_active == is_active)
         
         # 获取总数
         total_result = await db.execute(count_query)
@@ -111,6 +116,27 @@ class SurveyService:
         surveys = result.scalars().all()
         
         return list(surveys), total
+    
+    @staticmethod
+    async def get_survey_stats(db: AsyncSession) -> dict:
+        """获取问卷统计"""
+        # 启用中的问卷数
+        active_result = await db.execute(
+            select(func.count(Survey.id)).where(Survey.is_active == True)
+        )
+        active = active_result.scalar() or 0
+        
+        # 已停用的问卷数
+        inactive_result = await db.execute(
+            select(func.count(Survey.id)).where(Survey.is_active == False)
+        )
+        inactive = inactive_result.scalar() or 0
+        
+        return {
+            "active": active,
+            "inactive": inactive,
+            "total": active + inactive,
+        }
     
     @staticmethod
     async def update_survey(
@@ -168,6 +194,7 @@ class QuestionService:
             type=data.type,
             options=[opt.model_dump() for opt in data.options] if data.options else None,
             is_required=data.is_required,
+            is_pinned=data.is_pinned,
             order=data.order,
             validation=data.validation.model_dump() if data.validation else None,
         )
@@ -177,11 +204,12 @@ class QuestionService:
         return question
     
     @staticmethod
-    async def get_question_by_id(db: AsyncSession, question_id: int) -> Optional[Question]:
+    async def get_question_by_id(db: AsyncSession, question_id: int, load_answers: bool = False) -> Optional[Question]:
         """通过 ID 获取问题"""
-        result = await db.execute(
-            select(Question).where(Question.id == question_id)
-        )
+        query = select(Question).where(Question.id == question_id)
+        if load_answers:
+            query = query.options(selectinload(Question.answers))
+        result = await db.execute(query)
         return result.scalar_one_or_none()
     
     @staticmethod
@@ -208,6 +236,9 @@ class QuestionService:
     @staticmethod
     async def delete_question(db: AsyncSession, question: Question) -> None:
         """删除问题"""
+        # 先删除关联的答案（因为 SQLite 外键约束可能未启用）
+        for answer in question.answers:
+            await db.delete(answer)
         await db.delete(question)
         await db.commit()
 
@@ -334,12 +365,28 @@ class SubmissionService:
     
     @staticmethod
     async def get_random_questions(survey: Survey) -> list[Question]:
-        """获取随机题目（用于随机题库）"""
+        """获取随机题目（用于随机题库）
+        
+        随机抽题逻辑：
+        1. 保留题目（is_pinned=True）始终出现
+        2. 从非保留题目中随机抽取，使总数达到 random_count
+        """
         questions = list(survey.questions)
         
         if survey.is_random and survey.random_count:
-            count = min(survey.random_count, len(questions))
-            questions = random.sample(questions, count)
+            # 分离保留题目和普通题目
+            pinned = [q for q in questions if q.is_pinned]
+            unpinned = [q for q in questions if not q.is_pinned]
+            
+            # 计算需要从普通题目中抽取的数量
+            remaining_count = max(0, survey.random_count - len(pinned))
+            remaining_count = min(remaining_count, len(unpinned))
+            
+            # 随机抽取普通题目
+            selected_unpinned = random.sample(unpinned, remaining_count) if remaining_count > 0 else []
+            
+            # 合并保留题目和随机抽取的题目
+            questions = pinned + selected_unpinned
         
         return sorted(questions, key=lambda q: q.order)
     

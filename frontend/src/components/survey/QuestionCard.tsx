@@ -4,7 +4,6 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import type { Question, AnswerSubmit } from '@/types/survey'
 import { ImageUploader } from './ImageUploader'
@@ -78,39 +77,34 @@ export function QuestionCard({ question, value, onChange, index }: QuestionCardP
         )
 
       case 'boolean':
-        // 使用 undefined 作为初始状态，只有明确选择后才有值
+        // 判断题：类似单选题，提供"是/否"两个选项
         const boolValue = value?.value as boolean | undefined
-        const hasSelected = boolValue !== undefined
         return (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="flex items-center justify-center gap-6 p-6"
+          <RadioGroup
+            value={boolValue === undefined ? '' : boolValue ? 'true' : 'false'}
+            onValueChange={(v) => onChange({ value: v === 'true' })}
+            className="space-y-3"
           >
-            <Label
-              htmlFor="boolean-switch"
-              className={`text-lg font-medium transition-colors ${
-                hasSelected && boolValue === false ? 'text-foreground' : 'text-muted-foreground'
-              }`}
-            >
-              否
-            </Label>
-            <Switch
-              id="boolean-switch"
-              checked={boolValue === true}
-              onCheckedChange={(checked) => onChange({ value: checked })}
-              className="scale-125"
-            />
-            <Label
-              htmlFor="boolean-switch"
-              className={`text-lg font-medium transition-colors ${
-                hasSelected && boolValue === true ? 'text-foreground' : 'text-muted-foreground'
-              }`}
-            >
-              是
-            </Label>
-          </motion.div>
+            {[
+              { value: 'true', label: '是' },
+              { value: 'false', label: '否' },
+            ].map((option, i) => (
+              <motion.div
+                key={option.value}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 + i * 0.05 }}
+              >
+                <Label
+                  htmlFor={`boolean-${option.value}`}
+                  className="flex items-center space-x-3 p-4 rounded-2xl border border-border/50 cursor-pointer transition-all duration-200 hover:bg-accent/50 hover:border-primary/30 has-[input:checked]:bg-primary/5 has-[input:checked]:border-primary/50"
+                >
+                  <RadioGroupItem value={option.value} id={`boolean-${option.value}`} />
+                  <span className="flex-1 text-base">{option.label}</span>
+                </Label>
+              </motion.div>
+            ))}
+          </RadioGroup>
         )
 
       case 'text':

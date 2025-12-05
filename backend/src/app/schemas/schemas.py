@@ -37,6 +37,16 @@ class QuestionValidationSchema(BaseModel):
     max_images: Optional[int] = None
 
 
+class QuestionConditionSchema(BaseModel):
+    """条件显示规则
+    
+    用于实现分支逻辑：根据某道题的答案决定是否显示当前题目
+    例如："是否游玩过BA？" 选"是"则显示BA相关题目
+    """
+    depends_on: int  # 依赖的问题 ID
+    show_when: str | list[str]  # 触发显示的答案值（支持单值或多值）
+
+
 class QuestionCreate(BaseModel):
     """创建问题"""
     title: str = Field(..., min_length=1, max_length=1000)
@@ -47,6 +57,7 @@ class QuestionCreate(BaseModel):
     is_pinned: bool = False  # 是否保留（随机抽题时始终出现）
     order: int = 0
     validation: Optional[QuestionValidationSchema] = None
+    condition: Optional[QuestionConditionSchema] = None  # 条件显示规则
 
 
 class QuestionUpdate(BaseModel):
@@ -59,6 +70,7 @@ class QuestionUpdate(BaseModel):
     is_pinned: Optional[bool] = None  # 是否保留
     order: Optional[int] = None
     validation: Optional[QuestionValidationSchema] = None
+    condition: Optional[QuestionConditionSchema] = None  # 条件显示规则
 
 
 class QuestionResponse(BaseModel):
@@ -72,6 +84,7 @@ class QuestionResponse(BaseModel):
     is_pinned: bool  # 是否保留
     order: int
     validation: Optional[QuestionValidationSchema]
+    condition: Optional[QuestionConditionSchema] = None  # 条件显示规则
     
     class Config:
         from_attributes = True

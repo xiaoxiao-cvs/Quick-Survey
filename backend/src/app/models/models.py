@@ -62,6 +62,11 @@ class Question(Base):
     # 格式: {"min_length": 10, "max_length": 500, "max_images": 3}
     validation: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     
+    # 条件显示规则 (JSON)
+    # 格式: {"depends_on": 问题ID, "show_when": "答案值" 或 ["值1", "值2"]}
+    # 用于实现分支逻辑：根据某道题的答案决定是否显示当前题目
+    condition: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    
     # 时间戳
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     

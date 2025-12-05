@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, ArrowRight, Send, AlertCircle, CheckCircle2 } from 'lucide-react'
@@ -33,6 +33,35 @@ export function SurveyPage() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
   const [startTime] = useState<number>(() => Date.now() / 1000) // 记录开始时间（秒）
 
+  // 检查条件题目是否应该显示
+  const isQuestionVisible = useCallback((question: Question, currentAnswers: Map<number, AnswerSubmit['content']>): boolean => {
+    // 没有条件限制的题目始终显示
+    if (!question.condition) return true
+    
+    // 检查依赖题目的答案
+    const dependAnswer = currentAnswers.get(question.condition.depends_on)
+    if (!dependAnswer) return false
+    
+    // 获取答案值（支持 value 和 boolean 类型）
+    const answerValue = dependAnswer.value
+    if (answerValue === undefined) return false
+    
+    const currentValue = String(answerValue)
+    const showWhen = question.condition.show_when
+    
+    // 支持多值匹配
+    if (Array.isArray(showWhen)) {
+      return showWhen.includes(currentValue)
+    }
+    return currentValue === showWhen
+  }, [])
+
+  // 计算可见题目列表
+  const visibleQuestions = useMemo(() => {
+    if (!survey) return []
+    return survey.questions.filter(question => isQuestionVisible(question, answers))
+  }, [survey, answers, isQuestionVisible])
+
   useEffect(() => {
     const fetchData = async () => {
       if (!code) return
@@ -42,7 +71,7 @@ export function SurveyPage() {
         // 并行获取问卷和安全配置
         const [surveyData, securityData] = await Promise.all([
           getSurveyByCode(code),
-          getSecurityConfig().catch(() => null), // 安全配置获取失败不阻塞
+          getSecurityConfig().catch(() => null), // 安全配置获取失败不阻塞问卷加载
         ])
         setSurvey(surveyData)
         setSecurityConfig(securityData)
@@ -53,12 +82,12 @@ export function SurveyPage() {
       }
     }
 
-    fetchData()
+      fetchData()
   }, [code])
 
-  const currentQuestion = survey?.questions[currentIndex]
-  const progress = survey ? ((currentIndex + 1) / survey.questions.length) * 100 : 0
-  const isLastQuestion = survey ? currentIndex === survey.questions.length - 1 : false
+  const currentQuestion = visibleQuestions[currentIndex]
+  const progress = visibleQuestions.length > 0 ? ((currentIndex + 1) / visibleQuestions.length) * 100 : 0
+  const isLastQuestion = visibleQuestions.length > 0 ? currentIndex === visibleQuestions.length - 1 : false
   const isFirstQuestion = currentIndex === 0
 
   const handleAnswerChange = useCallback((questionId: number, content: AnswerSubmit['content']) => {
@@ -70,7 +99,7 @@ export function SurveyPage() {
   }, [])
 
   const handleNext = () => {
-    if (!survey) return
+    if (!survey || visibleQuestions.length === 0) return
 
     // 检查必填
     if (currentQuestion?.is_required && !isQuestionAnswered(currentQuestion)) {
@@ -79,8 +108,8 @@ export function SurveyPage() {
     }
 
     if (isLastQuestion) {
-      // 检查所有必填问题
-      const unanswered = survey.questions.filter(
+      // 只检查可见的必填问题
+      const unanswered = visibleQuestions.filter(
         (q) => q.is_required && !isQuestionAnswered(q)
       )
       if (unanswered.length > 0) {
@@ -136,12 +165,17 @@ export function SurveyPage() {
 
     setSubmitting(true)
     try {
+      // 只提交可见题目的答案
+      const visibleQuestionIds = new Set(visibleQuestions.map(q => q.id))
+      
       const submitData = {
         player_name: playerName.trim(),
-        answers: Array.from(answers.entries()).map(([questionId, content]) => ({
-          question_id: questionId,
-          content,
-        })),
+        answers: Array.from(answers.entries())
+          .filter(([questionId]) => visibleQuestionIds.has(questionId))
+          .map(([questionId, content]) => ({
+            question_id: questionId,
+            content,
+          })),
         // 安全相关字段
         turnstile_token: turnstileToken || undefined,
         start_time: startTime,
@@ -290,7 +324,7 @@ export function SurveyPage() {
               退出
             </Button>
             <Badge variant="secondary" className="rounded-full px-3">
-              {currentIndex + 1} / {survey.questions.length}
+              {currentIndex + 1} / {visibleQuestions.length}
             </Badge>
           </div>
 

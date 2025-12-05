@@ -11,6 +11,13 @@ export interface QuestionValidation {
   max_images?: number
 }
 
+// 条件显示规则
+// 用于实现分支逻辑：根据某道题的答案决定是否显示当前题目
+export interface QuestionCondition {
+  depends_on: number           // 依赖的问题 ID
+  show_when: string | string[] // 触发显示的答案值（支持单值或多值）
+}
+
 // 问题类型
 export type QuestionType = 'single' | 'multiple' | 'boolean' | 'text' | 'image'
 
@@ -23,6 +30,7 @@ export interface Question {
   options?: QuestionOption[]
   is_required: boolean
   validation?: QuestionValidation
+  condition?: QuestionCondition  // 条件显示规则
 }
 
 // 公开问卷响应

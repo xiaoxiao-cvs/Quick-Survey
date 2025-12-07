@@ -64,7 +64,7 @@ export function QueryDialog({ open, onOpenChange }: QueryDialogProps) {
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
-        className="sm:max-w-md bg-background/95 backdrop-blur-xl border-border/50 rounded-2xl"
+        className="sm:max-w-lg md:max-w-xl bg-background/95 backdrop-blur-xl border-border/50 rounded-2xl"
         showCloseButton={true}
       >
         <DialogHeader>

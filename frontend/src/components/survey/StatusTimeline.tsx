@@ -1,26 +1,25 @@
-import { motion } from 'framer-motion'
 import { Check, X, Clock, Eye, FileText } from 'lucide-react'
+import {
+  Timeline,
+  TimelineContent,
+  TimelineDate,
+  TimelineHeader,
+  TimelineIndicator,
+  TimelineItem,
+  TimelineSeparator,
+  TimelineTitle,
+} from '@/components/ui/timeline'
 import type { SubmissionStatus } from '@/types/survey'
 
 interface StatusTimelineProps {
   submission: SubmissionStatus
 }
 
-interface TimelineNode {
-  id: string
-  title: string
-  description: string
-  time: string | null
-  status: 'completed' | 'current' | 'pending' | 'failed'
-  icon: React.ReactNode
-}
-
 function formatDateTime(isoString: string | null): string {
   if (!isoString) return ''
-  const date = new Date(isoString)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: 'long',
+  const d = new Date(isoString)
+  return d.toLocaleString('zh-CN', {
+    month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
@@ -30,133 +29,103 @@ function formatDateTime(isoString: string | null): string {
 export function StatusTimeline({ submission }: StatusTimelineProps) {
   const { timeline, status, review_note, player_name, fill_duration } = submission
 
-  // 构建时间线节点
-  const nodes: TimelineNode[] = [
+  // 计算当前激活的步骤
+  const getActiveStep = () => {
+    if (status === 'approved' || status === 'rejected') return 3
+    if (timeline.first_viewed_at) return 2
+    return 1
+  }
+
+  // 构建时间线数据
+  const items = [
     {
-      id: 'submitted',
+      id: 1,
       title: '提交问卷',
-      description: fill_duration ? `填写用时 ${fill_duration}` : '问卷已提交',
-      time: timeline.submitted_at,
-      status: 'completed',
-      icon: <FileText className="w-4 h-4" />,
+      description: fill_duration ? `填写用时 ${fill_duration}` : '问卷已成功提交',
+      date: formatDateTime(timeline.submitted_at),
+      icon: <FileText className="w-3.5 h-3.5" />,
     },
     {
-      id: 'viewed',
+      id: 2,
       title: '管理员查看',
       description: timeline.first_viewed_at ? '管理员已查看您的问卷' : '等待管理员查看',
-      time: timeline.first_viewed_at,
-      status: timeline.first_viewed_at ? 'completed' : status === 'pending' ? 'current' : 'pending',
-      icon: <Eye className="w-4 h-4" />,
+      date: formatDateTime(timeline.first_viewed_at),
+      icon: <Eye className="w-3.5 h-3.5" />,
     },
   ]
 
-  // 根据状态添加审核结果节点
+  // 根据状态添加最终节点
   if (status === 'approved') {
-    nodes.push({
-      id: 'approved',
+    items.push({
+      id: 3,
       title: '审核通过',
       description: `${player_name} 已记录到白名单`,
-      time: timeline.reviewed_at,
-      status: 'completed',
-      icon: <Check className="w-4 h-4" />,
+      date: formatDateTime(timeline.reviewed_at),
+      icon: <Check className="w-3.5 h-3.5" />,
     })
   } else if (status === 'rejected') {
-    nodes.push({
-      id: 'rejected',
+    items.push({
+      id: 3,
       title: '审核未通过',
       description: review_note || '管理员拒绝了您的问卷',
-      time: timeline.reviewed_at,
-      status: 'failed',
-      icon: <X className="w-4 h-4" />,
+      date: formatDateTime(timeline.reviewed_at),
+      icon: <X className="w-3.5 h-3.5" />,
     })
   } else {
-    nodes.push({
-      id: 'pending',
+    items.push({
+      id: 3,
       title: '等待审核',
       description: '管理员正在审核您的问卷',
-      time: null,
-      status: timeline.first_viewed_at ? 'current' : 'pending',
-      icon: <Clock className="w-4 h-4" />,
+      date: '',
+      icon: <Clock className="w-3.5 h-3.5" />,
     })
-  }
-
-  const getNodeStyles = (nodeStatus: TimelineNode['status']) => {
-    switch (nodeStatus) {
-      case 'completed':
-        return {
-          circle: 'bg-primary border-primary text-primary-foreground',
-          line: 'bg-primary',
-          title: 'text-foreground',
-          desc: 'text-muted-foreground',
-        }
-      case 'current':
-        return {
-          circle: 'bg-primary/20 border-primary text-primary animate-pulse',
-          line: 'bg-border',
-          title: 'text-foreground',
-          desc: 'text-muted-foreground',
-        }
-      case 'failed':
-        return {
-          circle: 'bg-destructive border-destructive text-destructive-foreground',
-          line: 'bg-destructive',
-          title: 'text-destructive',
-          desc: 'text-destructive/80',
-        }
-      case 'pending':
-      default:
-        return {
-          circle: 'bg-muted border-border text-muted-foreground',
-          line: 'bg-border',
-          title: 'text-muted-foreground',
-          desc: 'text-muted-foreground/60',
-        }
-    }
   }
 
   return (
-    <div className="relative pl-8">
-      {nodes.map((node, index) => {
-        const styles = getNodeStyles(node.status)
-        const isLast = index === nodes.length - 1
-
-        return (
-          <motion.div
-            key={node.id}
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.15, duration: 0.3 }}
-            className="relative pb-8 last:pb-0"
-          >
-            {/* 连接线 */}
-            {!isLast && (
-              <div
-                className={`absolute -left-5 top-8 w-0.5 h-[calc(100%-16px)] ${styles.line}`}
-              />
-            )}
-
-            {/* 节点圆圈 */}
-            <div
-              className={`absolute -left-7 top-0 w-8 h-8 rounded-full border-2 flex items-center justify-center ${styles.circle}`}
+    <Timeline defaultValue={getActiveStep()}>
+      {items.map((item) => (
+        <TimelineItem
+          key={item.id}
+          step={item.id}
+          className="group-data-[orientation=vertical]/timeline:ms-10"
+        >
+          <TimelineHeader>
+            <TimelineSeparator className="group-data-[orientation=vertical]/timeline:-left-7 group-data-[orientation=vertical]/timeline:h-[calc(100%-1.5rem-0.25rem)] group-data-[orientation=vertical]/timeline:translate-y-6.5" />
+            <TimelineDate>{item.date}</TimelineDate>
+            <TimelineTitle
+              className={
+                status === 'rejected' && item.id === 3
+                  ? 'text-destructive'
+                  : status === 'approved' && item.id === 3
+                  ? 'text-primary'
+                  : ''
+              }
             >
-              {node.icon}
-            </div>
-
-            {/* 内容 */}
-            <div className="min-h-8">
-              <div className="flex items-center gap-3 mb-1">
-                <h4 className={`font-medium ${styles.title}`}>{node.title}</h4>
-                {node.time && (
-                  <span className="text-xs text-muted-foreground">
-                    {formatDateTime(node.time)}
-                  </span>
-                )}
-              </div>
-              <p className={`text-sm ${styles.desc}`}>{node.description}</p>
-            </div>
-          </motion.div>
-        )
-      })}
-    </div>
+              {item.title}
+            </TimelineTitle>
+            <TimelineIndicator
+              className={`group-data-[orientation=vertical]/timeline:-left-7 flex size-6 items-center justify-center ${
+                status === 'rejected' && item.id === 3
+                  ? 'border-none bg-destructive text-destructive-foreground'
+                  : status === 'approved' && item.id === 3
+                  ? 'border-none bg-primary text-primary-foreground'
+                  : 'group-data-completed/timeline-item:border-none group-data-completed/timeline-item:bg-primary group-data-completed/timeline-item:text-primary-foreground'
+              }`}
+            >
+              {item.icon}
+            </TimelineIndicator>
+          </TimelineHeader>
+          <TimelineContent
+            className={
+              status === 'rejected' && item.id === 3
+                ? 'text-destructive/80'
+                : ''
+            }
+          >
+            {item.description}
+          </TimelineContent>
+        </TimelineItem>
+      ))}
+    </Timeline>
   )
 }

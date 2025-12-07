@@ -187,6 +187,8 @@ export function SurveyPage() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '提交失败，请稍后重试'
       toast.error(errorMessage)
+      // 提交失败后清除 Turnstile token
+      setTurnstileToken(null)
     } finally {
       setSubmitting(false)
     }

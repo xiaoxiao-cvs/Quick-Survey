@@ -49,13 +49,24 @@ def create_app() -> FastAPI:
     )
     
     # CORS 中间件
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors.allowed_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    origins = settings.cors.allowed_origins
+    # 如果配置了 ["*"]，需要特殊处理
+    if origins == ["*"]:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=False,  # 使用通配符时不能启用 credentials
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    else:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
     
     # 静态文件（上传的图片）
     upload_path = Path(settings.upload.path)

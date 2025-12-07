@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, Loader2, User, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -39,6 +40,16 @@ export function ConfirmDialog({
   turnstileVerified = false,
   onTurnstileVerify,
 }: ConfirmDialogProps) {
+  // 用于强制 Turnstile 重新渲染的 key
+  const [turnstileKey, setTurnstileKey] = useState(0)
+  
+  // 当 turnstileVerified 从 true 变为 false 时，递增 key 以触发 Turnstile 重新渲染
+  useEffect(() => {
+    if (!turnstileVerified && turnstileEnabled) {
+      setTurnstileKey(prev => prev + 1)
+    }
+  }, [turnstileVerified, turnstileEnabled])
+
   const canSubmit = playerName.trim() && (!turnstileEnabled || turnstileVerified)
 
   return (
@@ -95,7 +106,9 @@ export function ConfirmDialog({
                   安全验证
                 </Label>
                 <div className="flex justify-center">
+                  {/* 当 turnstileVerified 变为 false 时，使用 key 强制 Turnstile 重新渲染 */}
                   <Turnstile
+                    key={turnstileKey}
                     siteKey={turnstileSiteKey}
                     onVerify={onTurnstileVerify || (() => {})}
                     theme="auto"

@@ -28,7 +28,10 @@ upload:
 
 # CORS 配置
 cors:
-  allowed_origins: ["*"]
+  allowed_origins: 
+    - "https://panel.mcwok.cn"
+    - "http://localhost:5173"
+    - "http://localhost:5174"
 
 # 安全配置
 security:

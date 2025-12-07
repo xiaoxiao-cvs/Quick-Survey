@@ -1,12 +1,17 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { ThemeToggle } from './ThemeToggle'
-import { FileText } from 'lucide-react'
+import { FileText, Search } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { QueryDialog } from '@/components/survey/QueryDialog'
 
 interface LayoutProps {
   children: React.ReactNode
 }
 
 export function Layout({ children }: LayoutProps) {
+  const [queryOpen, setQueryOpen] = useState(false)
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors duration-300">
       {/* Header */}
@@ -28,7 +33,20 @@ export function Layout({ children }: LayoutProps) {
             <span className="font-semibold text-lg">Quick Survey</span>
           </motion.div>
           
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            {/* 查询进度按钮 */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setQueryOpen(true)}
+              className="rounded-xl hover:bg-primary/10"
+              title="查询进度"
+            >
+              <Search className="w-5 h-5" />
+            </Button>
+            
+            <ThemeToggle />
+          </div>
         </div>
       </motion.header>
 
@@ -48,6 +66,9 @@ export function Layout({ children }: LayoutProps) {
           <p>© {new Date().getFullYear()} Quick Survey. All rights reserved.</p>
         </div>
       </motion.footer>
+
+      {/* 查询模态框 */}
+      <QueryDialog open={queryOpen} onOpenChange={setQueryOpen} />
     </div>
   )
 }

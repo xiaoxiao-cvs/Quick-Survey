@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { FileText, ArrowRight, Loader2, AlertCircle } from 'lucide-react'
+import { FileText, ArrowRight, Loader2, AlertCircle, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getActiveSurvey } from '@/lib/api'
 import { toast } from 'sonner'
+import { QueryDialog } from '@/components/survey/QueryDialog'
 
 export function HomePage() {
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
   const [surveyInfo, setSurveyInfo] = useState<{ code: string; title: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [queryOpen, setQueryOpen] = useState(false)
   const navigate = useNavigate()
 
   // 检查是否有可用问卷
@@ -153,6 +155,23 @@ export function HomePage() {
                   </AnimatePresence>
                 </Button>
               </motion.div>
+
+              {/* 查询进度入口 */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7, duration: 0.4 }}
+                className="text-center"
+              >
+                <button
+                  type="button"
+                  onClick={() => setQueryOpen(true)}
+                  className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+                >
+                  <Search className="w-4 h-4" />
+                  <span>查询审核进度</span>
+                </button>
+              </motion.div>
             </div>
           </CardContent>
         </Card>
@@ -167,6 +186,9 @@ export function HomePage() {
           问卷由管理员配置
         </motion.p>
       </motion.div>
+
+      {/* 查询模态框 */}
+      <QueryDialog open={queryOpen} onOpenChange={setQueryOpen} />
     </div>
   )
 }

@@ -86,3 +86,28 @@ export interface UploadResponse {
   size: number
   mime_type: string
 }
+
+// 提交状态查询 - 时间线
+export interface SubmissionTimeline {
+  submitted_at: string | null
+  first_viewed_at: string | null
+  reviewed_at: string | null
+}
+
+// 提交状态查询 - 单条记录
+export interface SubmissionStatus {
+  id: number
+  player_name: string
+  status: 'pending' | 'approved' | 'rejected'
+  status_text: string
+  timeline: SubmissionTimeline
+  fill_duration: string | null
+  review_note: string | null
+  survey_title: string | null
+}
+
+// 提交状态查询响应
+export interface SubmissionQueryResponse {
+  count: number
+  submissions: SubmissionStatus[]
+}

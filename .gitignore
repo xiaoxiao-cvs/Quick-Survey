@@ -72,3 +72,4 @@ pnpm-debug.log*
 *.tsbuildinfo
 deploy/output
 .VSCodeCounter
+frontend/.env.production

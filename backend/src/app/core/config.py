@@ -56,6 +56,14 @@ class TimeCheckSettings(BaseSettings):
     min_submit_time: int = 10  # 最小提交时间（秒）
 
 
+class CleanupSettings(BaseSettings):
+    """清理任务配置"""
+    enabled: bool = True  # 是否启用自动清理
+    interval_days: int = 1  # 清理间隔（天）
+    run_hour: int = 3  # 每天执行时间（小时，0-23）
+    orphan_file_hours: int = 24  # 孤立文件超过多少小时后删除
+
+
 class SecuritySettings(BaseSettings):
     """安全配置"""
     turnstile: TurnstileSettings = Field(default_factory=TurnstileSettings)
@@ -70,6 +78,7 @@ class Settings(BaseSettings):
     upload: UploadSettings = Field(default_factory=UploadSettings)
     cors: CorsSettings = Field(default_factory=CorsSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
+    cleanup: CleanupSettings = Field(default_factory=CleanupSettings)
 
 
 def load_config() -> Settings:
@@ -95,6 +104,7 @@ def load_config() -> Settings:
             upload=UploadSettings(**config_data.get("upload", {})),
             cors=CorsSettings(**config_data.get("cors", {})),
             security=security_settings,
+            cleanup=CleanupSettings(**config_data.get("cleanup", {})),
         )
     
     return Settings()

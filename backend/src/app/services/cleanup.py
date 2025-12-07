@@ -120,7 +120,7 @@ class CleanupService:
     async def cleanup_orphan_files(cls) -> dict:
         """
         清理孤立的上传文件（没有关联到任何提交的文件）
-        超过 24 小时的未关联文件会被删除
+        超过配置时间的未关联文件会被删除
         """
         settings = get_settings()
         upload_dir = Path(settings.upload.path)
@@ -134,7 +134,7 @@ class CleanupService:
             return stats
         
         now = datetime.now(timezone.utc)
-        threshold_seconds = 24 * 60 * 60  # 24 小时
+        threshold_seconds = settings.cleanup.orphan_file_hours * 60 * 60  # 从配置读取
         
         async with async_session_maker() as db:
             # 获取所有数据库中记录的文件名
@@ -229,17 +229,24 @@ class CleanupService:
     
     @classmethod
     async def _cleanup_loop(cls):
-        """后台清理循环 - 每天凌晨 3 点执行"""
+        """后台清理循环 - 根据配置的间隔执行"""
+        settings = get_settings()
+        
         while cls._running:
             try:
                 now = datetime.now()
-                # 计算到下一个凌晨 3 点的秒数
-                next_run = now.replace(hour=3, minute=0, second=0, microsecond=0)
-                if now.hour >= 3:
-                    # 如果已经过了今天的 3 点，等到明天
-                    next_run = next_run.replace(day=now.day + 1)
+                run_hour = settings.cleanup.run_hour
+                interval_days = settings.cleanup.interval_days
+                
+                # 计算到下一个执行时间点的秒数
+                next_run = now.replace(hour=run_hour, minute=0, second=0, microsecond=0)
+                if now.hour >= run_hour:
+                    # 如果已经过了今天的执行时间，等到下一个周期
+                    from datetime import timedelta
+                    next_run = next_run + timedelta(days=interval_days)
                 
                 wait_seconds = (next_run - now).total_seconds()
+                print(f"[Cleanup] 清理间隔: {interval_days}天, 执行时间: {run_hour}:00")
                 print(f"[Cleanup] 下次清理时间: {next_run}, 等待 {wait_seconds/3600:.1f} 小时")
                 
                 await asyncio.sleep(wait_seconds)
@@ -257,10 +264,16 @@ class CleanupService:
     @classmethod
     def start_background_task(cls):
         """启动后台清理任务"""
+        settings = get_settings()
+        
+        if not settings.cleanup.enabled:
+            print("[Cleanup] 自动清理已禁用")
+            return
+        
         if cls._task is None or cls._task.done():
             cls._running = True
             cls._task = asyncio.create_task(cls._cleanup_loop())
-            print("[Cleanup] 后台清理任务已启动")
+            print(f"[Cleanup] 后台清理任务已启动 (间隔: {settings.cleanup.interval_days}天, 时间: {settings.cleanup.run_hour}:00)")
     
     @classmethod
     def stop_background_task(cls):

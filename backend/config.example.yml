@@ -47,11 +47,22 @@ security:
     # 是否启用 IP 限制
     enabled: true
     # 同一 IP 每天最大提交次数
-    max_submissions_per_day: 2
+    max_submissions_per_day: 3
   
   # 提交时间检测
   time_check:
     # 是否启用时间检测
     enabled: true
     # 最小填写时间（秒），低于此时间视为可疑
-    min_submit_time: 10
+    min_submit_time: 5
+
+# 清理任务配置
+cleanup:
+  # 是否启用自动清理
+  enabled: false
+  # 清理间隔（天）
+  interval_days: 1
+  # 每天执行时间（小时，0-23，如 3 表示凌晨3点）
+  run_hour: 3
+  # 孤立文件超过多少小时后删除
+  orphan_file_hours: 24

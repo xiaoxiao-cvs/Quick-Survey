@@ -137,38 +137,90 @@ async def submit_survey(
     fill_duration = check_submit_time(data.start_time)
     
     # === 业务逻辑验证 ===
-
+    
+    # 添加调试日志
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[Submit] 玩家: {data.player_name}, 答案数: {len(data.answers)}")
+    logger.info(f"[Submit] 问卷问题 IDs: {[q.id for q in survey.questions]}")
+    logger.info(f"[Submit] 提交答案 IDs: {[a.question_id for a in data.answers]}")
     
     # 验证答案
     question_ids = {q.id for q in survey.questions}
     for answer in data.answers:
         if answer.question_id not in question_ids:
+            logger.warning(f"[Submit] 无效问题 ID: {answer.question_id}, 有效 IDs: {question_ids}")
             raise HTTPException(
                 status_code=400, 
                 detail=f"无效的问题 ID: {answer.question_id}"
             )
     
-    # 检查必填问题（仅对非随机问卷进行完整检查）
+    # 构建答案映射，用于检查条件题的依赖
+    answer_map = {a.question_id: a.content for a in data.answers}
+    question_map = {q.id: q for q in survey.questions}
+    
+    # 辅助函数：检查条件题是否应该显示
+    def is_question_visible(question) -> bool:
+        """检查题目是否应该对用户可见（基于条件逻辑）"""
+        if not question.condition:
+            return True  # 没有条件的题目始终可见
+        
+        depends_on = question.condition.get("depends_on")
+        show_when = question.condition.get("show_when")
+        
+        if depends_on is None or show_when is None:
+            return True
+        
+        # depends_on 是题目的索引（从0开始）
+        sorted_questions = sorted(survey.questions, key=lambda q: q.id)
+        if depends_on < 0 or depends_on >= len(sorted_questions):
+            return True
+        
+        depend_question = sorted_questions[depends_on]
+        depend_answer = answer_map.get(depend_question.id)
+        
+        if not depend_answer:
+            return False  # 依赖的题目没有回答，条件题不可见
+        
+        # 获取答案值
+        answer_value = depend_answer.get("value")
+        if answer_value is None:
+            return False
+        
+        answer_str = str(answer_value)
+        
+        # 检查是否匹配显示条件
+        if isinstance(show_when, list):
+            return answer_str in show_when
+        return answer_str == str(show_when)
+    
+    # 检查必填问题（考虑条件题逻辑）
     # 对于随机问卷，前端只收到部分题目，无法在后端验证完整性
     if not survey.is_random:
-        required_questions = {q.id for q in survey.questions if q.is_required}
+        # 只检查可见的必填题
+        required_questions = {
+            q.id for q in survey.questions 
+            if q.is_required and is_question_visible(q)
+        }
         answered_questions = {a.question_id for a in data.answers}
         missing = required_questions - answered_questions
         if missing:
+            missing_titles = [question_map[qid].title for qid in missing if qid in question_map]
+            logger.warning(f"[Submit] 缺少必填问题: {missing}, 标题: {missing_titles}")
             raise HTTPException(
                 status_code=400,
-                detail=f"缺少必填问题的答案: {list(missing)}"
+                detail=f"缺少必填问题的答案: {missing_titles}"
             )
     else:
         # 对于随机问卷，只验证用户回答的必填题是否都有内容
-        answered_question_ids = {a.question_id for a in data.answers}
-        question_map = {q.id: q for q in survey.questions}
         for answer in data.answers:
             question = question_map.get(answer.question_id)
             if question and question.is_required:
                 # 检查必填题是否有有效内容
                 content = answer.content
+                logger.info(f"[Submit] 检查必填题 {question.id}: content={content}")
                 if not content:
+                    logger.warning(f"[Submit] 必填问题未作答: {question.title}")
                     raise HTTPException(
                         status_code=400,
                         detail=f"必填问题未作答: {question.title}"

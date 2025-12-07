@@ -34,7 +34,12 @@ async def verify_turnstile(token: str, ip: Optional[str] = None) -> bool:
         # 未配置密钥，跳过验证（开发环境）
         return True
     
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
+        logger.info(f"[Turnstile] 开始验证, IP: {ip}, token长度: {len(token) if token else 0}")
+        
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://challenges.cloudflare.com/turnstile/v0/siteverify",
@@ -47,20 +52,39 @@ async def verify_turnstile(token: str, ip: Optional[str] = None) -> bool:
             )
             result = response.json()
             
-            # 添加调试日志
-            import logging
-            logging.info(f"[Turnstile] 验证结果: {result}")
+            logger.info(f"[Turnstile] 验证结果: {result}")
             
             if not result.get("success"):
                 error_codes = result.get("error-codes", [])
-                logging.warning(f"[Turnstile] 验证失败: {error_codes}")
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"安全验证失败: {', '.join(error_codes) if error_codes else '未知错误'}"
-                )
+                logger.warning(f"[Turnstile] 验证失败: {error_codes}, token前20字符: {token[:20] if token else 'None'}...")
+                
+                # 提供更友好的错误信息
+                error_messages = {
+                    "missing-input-secret": "服务器配置错误: 缺少密钥",
+                    "invalid-input-secret": "服务器配置错误: 密钥无效",
+                    "missing-input-response": "缺少验证token",
+                    "invalid-input-response": "验证token无效或已过期",
+                    "bad-request": "请求格式错误",
+                    "timeout-or-duplicate": "验证已过期或重复使用，请刷新页面重试",
+                    "internal-error": "Cloudflare服务内部错误",
+                }
+                
+                user_message = "安全验证失败"
+                if error_codes:
+                    for code in error_codes:
+                        if code in error_messages:
+                            user_message = error_messages[code]
+                            break
+                    else:
+                        user_message = f"安全验证失败: {', '.join(error_codes)}"
+                
+                raise HTTPException(status_code=400, detail=user_message)
             
+            logger.info(f"[Turnstile] 验证成功")
             return True
+            
     except httpx.RequestError as e:
+        logger.error(f"[Turnstile] 网络错误: {e}")
         # 网络错误时，根据配置决定是否放行
         if settings.server.debug:
             return True

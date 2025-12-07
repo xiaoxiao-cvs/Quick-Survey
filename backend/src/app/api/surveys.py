@@ -128,6 +128,7 @@ async def get_survey(
                     "is_pinned": q.is_pinned,
                     "order": q.order,
                     "validation": q.validation,
+                    "condition": q.condition,
                 }
                 for q in questions
             ],

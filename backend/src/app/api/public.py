@@ -58,6 +58,7 @@ async def get_active_survey(
                     "options": q.options,
                     "is_required": q.is_required,
                     "validation": q.validation,
+                    "condition": q.condition,
                 }
                 for q in questions
             ],
@@ -97,6 +98,7 @@ async def get_public_survey(
                     "options": q.options,
                     "is_required": q.is_required,
                     "validation": q.validation,
+                    "condition": q.condition,
                 }
                 for q in questions
             ],

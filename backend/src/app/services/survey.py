@@ -197,6 +197,7 @@ class QuestionService:
             is_pinned=data.is_pinned,
             order=data.order,
             validation=data.validation.model_dump() if data.validation else None,
+            condition=data.condition.model_dump() if data.condition else None,
         )
         db.add(question)
         await db.commit()
@@ -225,6 +226,8 @@ class QuestionService:
             update_data["options"] = [opt.model_dump() for opt in data.options]
         if "validation" in update_data and update_data["validation"]:
             update_data["validation"] = data.validation.model_dump()
+        if "condition" in update_data and update_data["condition"]:
+            update_data["condition"] = data.condition.model_dump()
         
         for field, value in update_data.items():
             setattr(question, field, value)

@@ -34,12 +34,21 @@ export function SurveyPage() {
   const [startTime] = useState<number>(() => Date.now() / 1000) // 记录开始时间（秒）
 
   // 检查条件题目是否应该显示
-  const isQuestionVisible = useCallback((question: Question, currentAnswers: Map<number, AnswerSubmit['content']>): boolean => {
+  const isQuestionVisible = useCallback((question: Question, currentAnswers: Map<number, AnswerSubmit['content']>, allQuestions: Question[]): boolean => {
     // 没有条件限制的题目始终显示
     if (!question.condition) return true
     
+    // depends_on 存储的是题目的索引/order（如 1 表示第2题，索引从0开始）
+    const dependIndex = question.condition.depends_on
+    
+    // 按 order 排序后，找到对应索引的题目
+    const sortedQuestions = [...allQuestions].sort((a, b) => (a.id > b.id ? 1 : -1))
+    const dependQuestion = sortedQuestions[dependIndex]
+    
+    if (!dependQuestion) return false
+    
     // 检查依赖题目的答案
-    const dependAnswer = currentAnswers.get(question.condition.depends_on)
+    const dependAnswer = currentAnswers.get(dependQuestion.id)
     if (!dependAnswer) return false
     
     // 获取答案值（支持 value 和 boolean 类型）
@@ -59,7 +68,7 @@ export function SurveyPage() {
   // 计算可见题目列表
   const visibleQuestions = useMemo(() => {
     if (!survey) return []
-    return survey.questions.filter(question => isQuestionVisible(question, answers))
+    return survey.questions.filter(question => isQuestionVisible(question, answers, survey.questions))
   }, [survey, answers, isQuestionVisible])
 
   useEffect(() => {

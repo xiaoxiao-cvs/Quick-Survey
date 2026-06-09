@@ -42,8 +42,10 @@ class SurveyService:
                 type=q_data.type,
                 options=[opt.model_dump() for opt in q_data.options] if q_data.options else None,
                 is_required=q_data.is_required,
+                is_pinned=q_data.is_pinned,
                 order=q_data.order if q_data.order else i,
                 validation=q_data.validation.model_dump() if q_data.validation else None,
+                condition=q_data.condition.model_dump() if q_data.condition else None,
             )
             survey.questions.append(question)
         

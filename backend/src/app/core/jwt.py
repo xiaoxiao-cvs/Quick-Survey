@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import base64
 import json
 from datetime import datetime
@@ -40,20 +41,14 @@ class JwtUtil:
     @classmethod
     def _create_signature(cls, data: str) -> str:
         """
-        创建签名 - 与 Java 端保持一致
-        Java: base64UrlEncode(Base64.getEncoder().encodeToString(SHA256(data + secretKey)))
+        创建签名 - 标准 JWT HS256
+        与 mod 端 JwtUtil 对齐: signature = urlsafe_base64(HmacSHA256(data, secretBytes))
+        secretBytes 为 jwt_secret 字符串的 UTF-8 字节, base64url 无 padding。
         """
         settings = get_settings()
-        sign_data = data + settings.auth.jwt_secret
-        
-        # SHA256 哈希
-        hash_bytes = hashlib.sha256(sign_data.encode()).digest()
-        
-        # Base64 编码
-        b64_hash = base64.b64encode(hash_bytes).decode()
-        
-        # Base64 URL 编码
-        return base64.urlsafe_b64encode(b64_hash.encode()).decode().rstrip("=")
+        secret = settings.auth.jwt_secret.encode("utf-8")
+        digest = hmac.new(secret, data.encode("utf-8"), hashlib.sha256).digest()
+        return base64.urlsafe_b64encode(digest).decode().rstrip("=")
     
     @classmethod
     def verify_and_decode(cls, token: str) -> Optional[TokenPayload]:

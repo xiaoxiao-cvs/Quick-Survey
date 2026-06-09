@@ -17,11 +17,8 @@ class DatabaseSettings(BaseSettings):
 
 class AuthSettings(BaseSettings):
     admin_password: str = ""
-    
-    @property
-    def jwt_secret(self) -> str:
-        """与 Java 端保持一致的 JWT 密钥"""
-        return f"ConvenientAccess-{self.admin_password}"
+    # 必须与 mod 配置文件里的 jwt-secret 逐字符一致, 用于验证 mod 签发的 HS256 token
+    jwt_secret: str = ""
 
 
 class UploadSettings(BaseSettings):

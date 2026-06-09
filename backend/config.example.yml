@@ -16,6 +16,9 @@ database:
 auth:
   # 从 Java 端 config.yml 复制 admin-password 的值
   admin_password: "your-admin-password-here"
+  # JWT 签名密钥, 必须与 mod 配置文件里的 jwt-secret 逐字符一致,
+  # 否则面板登录后调问卷管理端会全部 401
+  jwt_secret: "your-jwt-secret-here"
 
 # 文件上传配置
 upload:

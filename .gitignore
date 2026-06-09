@@ -59,6 +59,10 @@ frontend/.env
 frontend/.env.local
 frontend/.env.*.local
 
+# 修正: 上面 Python 模板的 lib/ 规则会误伤 frontend 源码目录 src/lib (api/utils 等), 重新纳入跟踪
+!frontend/src/lib/
+!frontend/src/lib/**
+
 # Logs
 npm-debug.log*
 yarn-debug.log*

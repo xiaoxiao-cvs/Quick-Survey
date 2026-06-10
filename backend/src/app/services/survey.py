@@ -46,6 +46,7 @@ class SurveyService:
                 order=q_data.order if q_data.order else i,
                 validation=q_data.validation.model_dump() if q_data.validation else None,
                 condition=q_data.condition.model_dump() if q_data.condition else None,
+                role=q_data.role,
             )
             survey.questions.append(question)
         
@@ -200,6 +201,7 @@ class QuestionService:
             order=data.order,
             validation=data.validation.model_dump() if data.validation else None,
             condition=data.condition.model_dump() if data.condition else None,
+            role=data.role,
         )
         db.add(question)
         await db.commit()
@@ -258,11 +260,14 @@ class SubmissionService:
         data: SubmissionCreate,
         ip_address: Optional[str] = None,
         fill_duration: Optional[float] = None,
+        player_name: Optional[str] = None,
+        qq: Optional[str] = None,
     ) -> Submission:
-        """创建提交"""
+        """创建提交。player_name/qq 由调用方 (public.submit) 按题目 role 抽取后传入。"""
         submission = Submission(
             survey_id=survey.id,
-            player_name=data.player_name,
+            player_name=player_name or data.player_name,
+            qq=qq,
             ip_address=ip_address,
             fill_duration=fill_duration,
             status="pending",
@@ -428,25 +433,19 @@ class SubmissionService:
             result = await db.execute(query)
             results.extend(result.scalars().all())
         
-        # 2. 按 QQ 号在答案中搜索（SQLite JSON 查询）
+        # 2. 按 QQ 号精确匹配 (结构化 Submission.qq 列, 替代旧的 Answer.content LIKE 模糊搜, 避免误伤)
         if qq and len(results) < limit:
-            # 在答案的 content 字段中搜索包含 QQ 号的记录
-            # content 格式可能是 {"text": "123456789"} 或 {"value": "123456789"}
             remaining = limit - len(results)
             existing_ids = {s.id for s in results}
-            
-            # 使用 LIKE 在 JSON 字段中搜索（SQLite 兼容）
             query = (
                 select(Submission)
                 .options(selectinload(Submission.survey))
-                .join(Answer, Answer.submission_id == Submission.id)
                 .where(
                     and_(
-                        Answer.content.cast(String).contains(qq),
+                        Submission.qq == qq,
                         Submission.id.notin_(existing_ids) if existing_ids else True
                     )
                 )
-                .distinct()
                 .order_by(Submission.created_at.desc())
                 .limit(remaining)
             )

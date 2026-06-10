@@ -66,10 +66,14 @@ class Question(Base):
     # 格式: {"depends_on": 问题ID, "show_when": "答案值" 或 ["值1", "值2"]}
     # 用于实现分支逻辑：根据某道题的答案决定是否显示当前题目
     condition: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    
+
+    # 语义标记: 把某道普通题标记为系统字段, 提交时其答案被抽取到 Submission 的结构化列。
+    # player_name=玩家名(白名单关联键), qq=联系QQ, NULL=普通题。这样新增联系字段只需出题+打标, 不改代码。
+    role: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
     # 时间戳
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
-    
+
     # 关系
     survey: Mapped["Survey"] = relationship("Survey", back_populates="questions")
     answers: Mapped[list["Answer"]] = relationship("Answer", back_populates="question", cascade="all, delete-orphan")
@@ -84,6 +88,7 @@ class Submission(Base):
     
     # 提交者信息
     player_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)  # 玩家名
+    qq: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # 联系QQ (从 role=qq 题抽取, 可空)
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)  # IP地址
     
     # 时间记录

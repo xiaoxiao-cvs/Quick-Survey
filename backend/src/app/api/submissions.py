@@ -88,6 +88,7 @@ async def get_submissions(
             "survey_id": sub.survey_id,
             "survey_title": sub.survey.title if sub.survey else "",
             "player_name": sub.player_name,
+            "qq": sub.qq,
             "status": sub.status,
             "created_at": sub.created_at.isoformat(),
             "reviewed_at": sub.reviewed_at.isoformat() if sub.reviewed_at else None,
@@ -130,6 +131,7 @@ async def get_submission(
             "question_title": question.title if question else "",
             "question_type": question.type if question else "",
             "question_options": question.options if question else None,  # 选项列表，用于前端渲染
+            "question_role": question.role if question else None,  # 语义标记, 供面板识别玩家名/QQ 行
             "content": answer.content,
         })
     
@@ -140,6 +142,7 @@ async def get_submission(
             "survey_id": submission.survey_id,
             "survey_title": submission.survey.title if submission.survey else "",
             "player_name": submission.player_name,
+            "qq": submission.qq,
             "ip_address": submission.ip_address,
             "fill_duration": submission.fill_duration,  # 填写耗时
             "first_viewed_at": submission.first_viewed_at.isoformat() if submission.first_viewed_at else None,  # 首次查看时间

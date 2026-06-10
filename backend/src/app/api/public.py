@@ -59,6 +59,7 @@ async def get_active_survey(
                     "is_required": q.is_required,
                     "validation": q.validation,
                     "condition": q.condition,
+                    "role": q.role,
                 }
                 for q in questions
             ],
@@ -99,6 +100,7 @@ async def get_public_survey(
                     "is_required": q.is_required,
                     "validation": q.validation,
                     "condition": q.condition,
+                    "role": q.role,
                 }
                 for q in questions
             ],
@@ -159,40 +161,58 @@ async def submit_survey(
     answer_map = {a.question_id: a.content for a in data.answers}
     question_map = {q.id: q for q in survey.questions}
     
+    # 预排序一次，供 is_question_visible 重复使用（避免每次调用都重新排序）
+    sorted_questions = sorted(survey.questions, key=lambda q: q.id)
+
     # 辅助函数：检查条件题是否应该显示
     def is_question_visible(question) -> bool:
-        """检查题目是否应该对用户可见（基于条件逻辑）"""
+        """检查题目是否应该对用户可见（基于条件逻辑）
+
+        depends_on 语义: 题目索引（按 ID 排序后的位置，从0开始）。
+        show_when 与依赖题答案的比较规则:
+        - single/boolean: 答案存放在 content["value"]
+        - multiple:       答案存放在 content["values"] (list)，命中任一即触发
+        - text:           答案存放在 content["text"]
+        - image:          不参与条件比较
+        """
         if not question.condition:
-            return True  # 没有条件的题目始终可见
-        
+            return True
+
         depends_on = question.condition.get("depends_on")
         show_when = question.condition.get("show_when")
-        
+
         if depends_on is None or show_when is None:
             return True
-        
-        # depends_on 是题目的索引（从0开始）
-        sorted_questions = sorted(survey.questions, key=lambda q: q.id)
+
         if depends_on < 0 or depends_on >= len(sorted_questions):
             return True
-        
+
         depend_question = sorted_questions[depends_on]
         depend_answer = answer_map.get(depend_question.id)
-        
+
         if not depend_answer:
             return False  # 依赖的题目没有回答，条件题不可见
-        
-        # 获取答案值
-        answer_value = depend_answer.get("value")
-        if answer_value is None:
+
+        # 兼容不同题型的答案字段
+        if "value" in depend_answer and depend_answer["value"] not in (None, ""):
+            answer_value = depend_answer["value"]
+        elif "values" in depend_answer and depend_answer["values"]:
+            answer_value = depend_answer["values"]
+        elif "text" in depend_answer and depend_answer["text"]:
+            answer_value = depend_answer["text"]
+        else:
             return False
-        
-        answer_str = str(answer_value)
-        
-        # 检查是否匹配显示条件
+
+        # 标准化 show_when 为集合
         if isinstance(show_when, list):
-            return answer_str in show_when
-        return answer_str == str(show_when)
+            show_set = {str(v) for v in show_when}
+        else:
+            show_set = {str(show_when)}
+
+        # multiple 题型：answer_value 是列表，命中任一值即触发
+        if isinstance(answer_value, list):
+            return any(str(v) in show_set for v in answer_value)
+        return str(answer_value) in show_set
     
     # 检查必填问题（考虑条件题逻辑）
     # 对于随机问卷，前端只收到部分题目，无法在后端验证完整性
@@ -226,13 +246,41 @@ async def submit_survey(
                         detail=f"必填问题未作答: {question.title}"
                     )
     
-    # 创建提交（包含填写耗时）
+    # === 按题目 role 标记抽取系统字段 (玩家名 / QQ) ===
+    def _role_scalar(content: dict):
+        if not content:
+            return None
+        for key in ("text", "value"):
+            val = content.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+        return None
+
+    role_player_name = None
+    role_qq = None
+    for q in survey.questions:
+        q_role = getattr(q, "role", None)
+        if q_role == "player_name" and q.id in answer_map:
+            role_player_name = _role_scalar(answer_map[q.id])
+        elif q_role == "qq" and q.id in answer_map:
+            role_qq = _role_scalar(answer_map[q.id])
+
+    # 玩家名优先用题目标记抽取, 兼容旧前端顶层 player_name; 缺失则拒绝 (白名单关联键不能空)
+    effective_player_name = (role_player_name or data.player_name or "").strip()
+    if not effective_player_name:
+        raise HTTPException(
+            status_code=400,
+            detail="缺少玩家名: 请填写玩家名 (或在问卷中配置一道标记为玩家名的题)"
+        )
+
+    # 创建提交（包含填写耗时 + 按 role 抽取的玩家名/QQ）
     submission = await SubmissionService.create_submission(
-        db, survey, data, ip_address, fill_duration
+        db, survey, data, ip_address, fill_duration,
+        player_name=effective_player_name, qq=role_qq,
     )
-    
+
     # 记录活动日志
-    await ActivityService.log_submit(db, data.player_name, submission.id)
+    await ActivityService.log_submit(db, effective_player_name, submission.id)
     
     # 记录 IP 提交（用于频率限制）
     await record_ip_submission(ip_address, code)

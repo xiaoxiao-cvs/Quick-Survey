@@ -11,6 +11,7 @@ class ApiResponse(BaseModel):
     success: bool
     data: Optional[dict] = None
     error: Optional[dict] = None
+    message: Optional[str] = None
 
 
 class PaginatedResponse(BaseModel):
@@ -39,11 +40,11 @@ class QuestionValidationSchema(BaseModel):
 
 class QuestionConditionSchema(BaseModel):
     """条件显示规则
-    
+
     用于实现分支逻辑：根据某道题的答案决定是否显示当前题目
     例如："是否游玩过BA？" 选"是"则显示BA相关题目
     """
-    depends_on: int  # 依赖的问题 ID
+    depends_on: int  # 依赖的题目索引（按 ID 排序后的位置，从0开始）— 前后端必须一致
     show_when: str | list[str]  # 触发显示的答案值（支持单值或多值）
 
 
@@ -58,6 +59,7 @@ class QuestionCreate(BaseModel):
     order: int = 0
     validation: Optional[QuestionValidationSchema] = None
     condition: Optional[QuestionConditionSchema] = None  # 条件显示规则
+    role: Optional[str] = Field(None, pattern="^(player_name|qq)$")  # 语义标记: 标记为系统字段 (玩家名/QQ)
 
 
 class QuestionUpdate(BaseModel):
@@ -71,6 +73,7 @@ class QuestionUpdate(BaseModel):
     order: Optional[int] = None
     validation: Optional[QuestionValidationSchema] = None
     condition: Optional[QuestionConditionSchema] = None  # 条件显示规则
+    role: Optional[str] = Field(None, pattern="^(player_name|qq)$")  # 语义标记
 
 
 class QuestionResponse(BaseModel):
@@ -85,7 +88,8 @@ class QuestionResponse(BaseModel):
     order: int
     validation: Optional[QuestionValidationSchema]
     condition: Optional[QuestionConditionSchema] = None  # 条件显示规则
-    
+    role: Optional[str] = None  # 语义标记 (玩家名/QQ), 前端据此识别系统字段题
+
     class Config:
         from_attributes = True
 
@@ -164,7 +168,8 @@ class AnswerSubmit(BaseModel):
 
 class SubmissionCreate(BaseModel):
     """创建提交"""
-    player_name: str = Field(..., min_length=1, max_length=64)
+    # 可空: 优先由后端从 role=player_name 题抽取; 顶层字段保留向后兼容旧前端
+    player_name: Optional[str] = Field(None, max_length=64)
     answers: list[AnswerSubmit]
     # 安全相关字段
     turnstile_token: Optional[str] = None  # Cloudflare Turnstile token
@@ -172,14 +177,17 @@ class SubmissionCreate(BaseModel):
     
     @field_validator('player_name')
     @classmethod
-    def sanitize_player_name(cls, v: str) -> str:
-        """清理玩家名称中的潜在恶意字符"""
-        # 移除 HTML 标签和脚本
+    def sanitize_player_name(cls, v: Optional[str]) -> Optional[str]:
+        """清理玩家名称中的潜在恶意字符 (可空: 由后端从题目抽取时顶层为空)。
+
+        Note: SQL 注入由 SQLAlchemy 参数化查询防御，无需在此处过滤 ';' / '--'
+        （那只会破坏合法名字如 "O'Brien"，并不提供真实保护）。
+        XSS 应在前端渲染时 escape，这里仅作最后一道防线移除明显的脚本片段。
+        """
+        if v is None:
+            return v
         v = re.sub(r'<[^>]*>', '', v)
-        # 移除 JavaScript 事件处理器
         v = re.sub(r'on\w+\s*=', '', v, flags=re.IGNORECASE)
-        # 移除潜在的 SQL 注入字符（基础防护，SQLAlchemy 已有参数化查询）
-        v = v.replace(';', '').replace('--', '')
         return v.strip()
 
 
@@ -201,6 +209,7 @@ class SubmissionListResponse(BaseModel):
     survey_id: int
     survey_title: str = ""
     player_name: str
+    qq: Optional[str] = None
     status: str
     created_at: datetime
     reviewed_at: Optional[datetime]
@@ -215,6 +224,7 @@ class SubmissionDetailResponse(BaseModel):
     survey_id: int
     survey_title: str = ""
     player_name: str
+    qq: Optional[str] = None
     ip_address: Optional[str]
     status: str
     review_note: Optional[str]

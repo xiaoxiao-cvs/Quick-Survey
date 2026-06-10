@@ -31,6 +31,7 @@ export interface Question {
   is_required: boolean
   validation?: QuestionValidation
   condition?: QuestionCondition  // 条件显示规则
+  role?: 'player_name' | 'qq'    // 语义标记: 系统字段题 (玩家名/QQ), 后端据此抽取结构化字段
 }
 
 // 公开问卷响应
@@ -54,7 +55,7 @@ export interface AnswerSubmit {
 
 // 提交请求
 export interface SubmissionCreate {
-  player_name: string
+  player_name?: string  // 可空: 配置了 role=player_name 题时由后端从答案抽取
   answers: AnswerSubmit[]
   // 安全相关字段
   turnstile_token?: string

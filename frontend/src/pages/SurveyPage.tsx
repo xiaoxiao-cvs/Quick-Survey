@@ -34,35 +34,39 @@ export function SurveyPage() {
   const [startTime] = useState<number>(() => Date.now() / 1000) // 记录开始时间（秒）
 
   // 检查条件题目是否应该显示
+  // depends_on 语义: 题目索引（按 ID 排序后的位置，从0开始）— 与后端 public.py 保持一致
+  // 答案字段兼容: single/boolean → value, multiple → values, text → text
   const isQuestionVisible = useCallback((question: Question, currentAnswers: Map<number, AnswerSubmit['content']>, allQuestions: Question[]): boolean => {
-    // 没有条件限制的题目始终显示
     if (!question.condition) return true
-    
-    // depends_on 存储的是题目的索引/order（如 1 表示第2题，索引从0开始）
+
     const dependIndex = question.condition.depends_on
-    
-    // 按 order 排序后，找到对应索引的题目
-    const sortedQuestions = [...allQuestions].sort((a, b) => (a.id > b.id ? 1 : -1))
+    const sortedQuestions = [...allQuestions].sort((a, b) => a.id - b.id)
     const dependQuestion = sortedQuestions[dependIndex]
-    
+
     if (!dependQuestion) return false
-    
-    // 检查依赖题目的答案
+
     const dependAnswer = currentAnswers.get(dependQuestion.id)
     if (!dependAnswer) return false
-    
-    // 获取答案值（支持 value 和 boolean 类型）
-    const answerValue = dependAnswer.value
-    if (answerValue === undefined) return false
-    
-    const currentValue = String(answerValue)
-    const showWhen = question.condition.show_when
-    
-    // 支持多值匹配
-    if (Array.isArray(showWhen)) {
-      return showWhen.includes(currentValue)
+
+    // 根据答案字段兼容不同题型
+    let answerValue: string | string[] | undefined
+    if (dependAnswer.value !== undefined && dependAnswer.value !== '') {
+      answerValue = String(dependAnswer.value)
+    } else if (Array.isArray(dependAnswer.values) && dependAnswer.values.length > 0) {
+      answerValue = dependAnswer.values.map(String)
+    } else if (typeof dependAnswer.text === 'string' && dependAnswer.text.trim() !== '') {
+      answerValue = dependAnswer.text
+    } else {
+      return false
     }
-    return currentValue === showWhen
+
+    const showWhen = question.condition.show_when
+    const showSet = new Set(Array.isArray(showWhen) ? showWhen.map(String) : [String(showWhen)])
+
+    if (Array.isArray(answerValue)) {
+      return answerValue.some(v => showSet.has(v))
+    }
+    return showSet.has(answerValue)
   }, [])
 
   // 计算可见题目列表
@@ -70,6 +74,12 @@ export function SurveyPage() {
     if (!survey) return []
     return survey.questions.filter(question => isQuestionVisible(question, answers, survey.questions))
   }, [survey, answers, isQuestionVisible])
+
+  // 是否有标记为玩家名的题: 有则玩家名从该题抽取, 末尾弹窗不再单独收 (退役旧的硬编码输入框)
+  const hasPlayerNameQuestion = useMemo(
+    () => (survey?.questions ?? []).some(q => q.role === 'player_name'),
+    [survey]
+  )
 
   useEffect(() => {
     const fetchData = async () => {
@@ -161,7 +171,7 @@ export function SurveyPage() {
   const handleSubmit = async () => {
     if (!code || !survey) return
 
-    if (!playerName.trim()) {
+    if (!hasPlayerNameQuestion && !playerName.trim()) {
       toast.error('请输入您的游戏名称')
       return
     }
@@ -178,7 +188,8 @@ export function SurveyPage() {
       const visibleQuestionIds = new Set(visibleQuestions.map(q => q.id))
       
       const submitData = {
-        player_name: playerName.trim(),
+        // 配了玩家名题则后端从答案抽取, 不传顶层; 否则兼容旧流程传输入框值
+        player_name: hasPlayerNameQuestion ? undefined : playerName.trim(),
         answers: Array.from(answers.entries())
           .filter(([questionId]) => visibleQuestionIds.has(questionId))
           .map(([questionId, content]) => ({
@@ -426,6 +437,7 @@ export function SurveyPage() {
         onPlayerNameChange={setPlayerName}
         onSubmit={handleSubmit}
         submitting={submitting}
+        requireNameInput={!hasPlayerNameQuestion}
         turnstileEnabled={securityConfig?.turnstile_enabled}
         turnstileSiteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY}
         turnstileVerified={!!turnstileToken}

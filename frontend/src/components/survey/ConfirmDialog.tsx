@@ -21,6 +21,7 @@ interface ConfirmDialogProps {
   onPlayerNameChange: (name: string) => void
   onSubmit: () => void
   submitting: boolean
+  requireNameInput?: boolean  // false: 玩家名由问卷题目收集, 隐藏此输入框 (退役旧硬编码)
   // Turnstile 相关
   turnstileEnabled?: boolean
   turnstileSiteKey?: string
@@ -35,6 +36,7 @@ export function ConfirmDialog({
   onPlayerNameChange,
   onSubmit,
   submitting,
+  requireNameInput = true,
   turnstileEnabled = false,
   turnstileSiteKey,
   turnstileVerified = false,
@@ -50,7 +52,7 @@ export function ConfirmDialog({
     }
   }, [turnstileVerified, turnstileEnabled])
 
-  const canSubmit = playerName.trim() && (!turnstileEnabled || turnstileVerified)
+  const canSubmit = (!requireNameInput || playerName.trim()) && (!turnstileEnabled || turnstileVerified)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -71,7 +73,7 @@ export function ConfirmDialog({
             </motion.div>
             <DialogTitle className="text-xl">确认提交</DialogTitle>
             <DialogDescription>
-              请输入您的游戏名称以完成提交
+              {requireNameInput ? '请输入您的游戏名称以完成提交' : '请确认无误后提交，等待管理员审核'}
             </DialogDescription>
           </DialogHeader>
 
@@ -81,17 +83,19 @@ export function ConfirmDialog({
             transition={{ delay: 0.2 }}
             className="space-y-4 py-4"
           >
-            <div className="space-y-2">
-              <Label htmlFor="player-name">游戏名称</Label>
-              <Input
-                id="player-name"
-                placeholder="请输入您的游戏名称"
-                value={playerName}
-                onChange={(e) => onPlayerNameChange(e.target.value)}
-                className="h-12 rounded-xl text-base"
-                disabled={submitting}
-              />
-            </div>
+            {requireNameInput && (
+              <div className="space-y-2">
+                <Label htmlFor="player-name">游戏名称</Label>
+                <Input
+                  id="player-name"
+                  placeholder="请输入您的游戏名称"
+                  value={playerName}
+                  onChange={(e) => onPlayerNameChange(e.target.value)}
+                  className="h-12 rounded-xl text-base"
+                  disabled={submitting}
+                />
+              </div>
+            )}
 
             {/* Turnstile 验证 */}
             {turnstileEnabled && turnstileSiteKey && (

@@ -5,7 +5,9 @@ import type {
   SubmissionCreate,
   SecurityConfig,
   UploadResponse,
-  SubmissionQueryResponse,
+  SubmitResult,
+  SubmissionStatus,
+  RegistrationCodeResult,
 } from '@/types/survey'
 
 // 问卷后端基址。生产留空 -> 同源相对 (/api/v1, /uploads); 开发用 .env 的 VITE_API_URL 指向 localhost:8000。
@@ -58,9 +60,9 @@ export async function getActiveSurvey(): Promise<PublicSurvey> {
 export async function submitSurvey(
   code: string,
   payload: SubmissionCreate,
-): Promise<{ id: number; message: string }> {
+): Promise<SubmitResult> {
   try {
-    const { data } = await http.post<ApiResponse<{ id: number; message: string }>>(
+    const { data } = await http.post<ApiResponse<SubmitResult>>(
       `/public/surveys/${encodeURIComponent(code)}/submit`,
       payload,
     )
@@ -79,14 +81,27 @@ export async function getSecurityConfig(): Promise<SecurityConfig> {
   }
 }
 
-export async function querySubmissionStatus(playerName: string): Promise<SubmissionQueryResponse> {
+// 凭 token 查询单条提交状态 (取代旧的按玩家名查询)
+export async function querySubmissionStatus(token: string): Promise<SubmissionStatus> {
   try {
-    const { data } = await http.get<ApiResponse<SubmissionQueryResponse>>('/public/submissions/query', {
-      params: { player_name: playerName },
+    const { data } = await http.get<ApiResponse<{ submission: SubmissionStatus }>>('/public/submissions/query', {
+      params: { token },
     })
-    return unwrap(data, '未找到相关的问卷提交记录')
+    return unwrap(data, '未找到相关的问卷提交记录').submission
   } catch (err) {
     throw toError(err, '未找到相关的问卷提交记录')
+  }
+}
+
+// 凭 token 自助领取注册码 (仅通过审核且未领取过时返回明文码)
+export async function redeemRegistrationCode(token: string): Promise<RegistrationCodeResult> {
+  try {
+    const { data } = await http.post<ApiResponse<RegistrationCodeResult>>(
+      `/public/submissions/${encodeURIComponent(token)}/registration-code`,
+    )
+    return unwrap(data, '领取注册码失败，请稍后重试')
+  } catch (err) {
+    throw toError(err, '领取注册码失败，请稍后重试')
   }
 }
 

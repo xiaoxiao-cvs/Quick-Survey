@@ -98,6 +98,7 @@ export interface SubmissionTimeline {
 // 提交状态查询 - 单条记录
 export interface SubmissionStatus {
   id: number
+  token: string
   player_name: string
   status: 'pending' | 'approved' | 'rejected'
   status_text: string
@@ -105,10 +106,21 @@ export interface SubmissionStatus {
   fill_duration: string | null
   review_note: string | null
   survey_title: string | null
+  code_issued: boolean       // 是否已领取过注册码
+  can_get_code: boolean      // 是否可领取 (已通过且未领取)
 }
 
-// 提交状态查询响应
-export interface SubmissionQueryResponse {
-  count: number
-  submissions: SubmissionStatus[]
+// 提交成功响应
+export interface SubmitResult {
+  id: number
+  token: string              // 自助凭据: 玩家凭此查询进度并领取注册码
+  message: string
+}
+
+// 领取注册码响应: 成功带明文码, 已领取则 already_issued=true
+export interface RegistrationCodeResult {
+  registration_code?: string
+  code_expires_minutes?: number
+  already_issued?: boolean
+  message?: string
 }

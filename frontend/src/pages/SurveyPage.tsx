@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Send, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Send, AlertCircle, CheckCircle2, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getSurveyByCode, submitSurvey, getSecurityConfig } from '@/lib/api'
+import { saveSubmission } from '@/lib/submissions-storage'
 import type { PublicSurvey, Question, AnswerSubmit, SecurityConfig } from '@/types/survey'
 import { toast } from 'sonner'
 import { QuestionCard } from '@/components/survey/QuestionCard'
@@ -26,6 +28,7 @@ export function SurveyPage() {
   const [submitting, setSubmitting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [submittedToken, setSubmittedToken] = useState<string | null>(null)
   const [direction, setDirection] = useState<'next' | 'prev'>('next')
   
   // 安全相关状态
@@ -201,7 +204,10 @@ export function SurveyPage() {
         start_time: startTime,
       }
 
-      await submitSurvey(code, submitData)
+      const result = await submitSurvey(code, submitData)
+      // 凭据回执: 保存到本机便于查询页自动回填, 并在成功页展示提示玩家妥善保存
+      setSubmittedToken(result.token)
+      saveSubmission(result.token, survey.title)
       setSubmitted(true)
       setShowConfirm(false)
     } catch (err) {
@@ -303,9 +309,45 @@ export function SurveyPage() {
             transition={{ delay: 0.5 }}
           >
             <h2 className="text-3xl font-bold mb-3">提交成功！</h2>
-            <p className="text-muted-foreground mb-8 text-lg">
+            <p className="text-muted-foreground mb-6 text-lg">
               感谢您的填写，请等待管理员审核
             </p>
+
+            {submittedToken && (
+              <div className="mb-8 text-left rounded-2xl border border-amber-500/40 bg-amber-500/5 p-4">
+                <p className="text-sm font-medium mb-2">请妥善保存您的查询凭据</p>
+                <p className="text-xs text-muted-foreground mb-3">
+                  凭此凭据可查询审核进度，并在通过后领取进服注册码。本浏览器已自动记住，
+                  但清除浏览器数据或更换设备后将丢失，建议另行保存。
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    readOnly
+                    value={submittedToken}
+                    className="font-mono text-xs rounded-xl"
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="复制凭据"
+                    className="rounded-xl shrink-0"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(submittedToken)
+                        toast.success('凭据已复制')
+                      } catch {
+                        toast.error('复制失败，请手动选择复制')
+                      }
+                    }}
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <Button
               onClick={() => navigate('/')}
               size="lg"

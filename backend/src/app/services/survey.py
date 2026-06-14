@@ -2,7 +2,7 @@ import secrets
 import random
 from typing import Optional
 from datetime import datetime, timezone
-from sqlalchemy import select, func, delete, String
+from sqlalchemy import select, func, delete, String, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -419,6 +419,19 @@ class SubmissionService:
             select(Submission)
             .options(selectinload(Submission.survey))
             .where(Submission.token == token)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def get_approved_by_qq(db: AsyncSession, qq: str) -> Optional[Submission]:
+        """按 QQ 查最近一条已通过审核的提交 (主群自动准入: 申请人 QQ 命中即放行)。无则 None。"""
+        if not qq:
+            return None
+        result = await db.execute(
+            select(Submission)
+            .where(and_(Submission.qq == qq, Submission.status == "approved"))
+            .order_by(Submission.reviewed_at.desc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
 

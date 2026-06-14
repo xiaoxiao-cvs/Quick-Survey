@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from app.schemas import ApiResponse, SubmissionCreate, PublicSurveyResponse
 from app.services import SurveyService, SubmissionService, FileService, ActivityService
+from app.services import bot_notify
 from app.services.mod_client import issue_registration_code as mod_issue_registration_code
 from app.core import (
     verify_turnstile,
@@ -276,6 +277,10 @@ async def submit_survey(
             detail="缺少玩家名: 请填写玩家名 (或在问卷中配置一道标记为玩家名的题)"
         )
 
+    # QQ 若填写须为纯数字 (机器人按 QQ @ 通知/主群准入, 非数字无意义且会误伤)
+    if role_qq and not role_qq.isdigit():
+        raise HTTPException(status_code=400, detail="QQ号需为纯数字")
+
     # 创建提交（包含填写耗时 + 按 role 抽取的玩家名/QQ）
     submission = await SubmissionService.create_submission(
         db, survey, data, ip_address, fill_duration,
@@ -284,7 +289,13 @@ async def submit_survey(
 
     # 记录活动日志
     await ActivityService.log_submit(db, effective_player_name, submission.id)
-    
+
+    # 入队审核群通知 (尽力而为: 入队失败不影响提交本身)
+    try:
+        await bot_notify.enqueue(db, submission, bot_notify.SUBMIT)
+    except Exception:
+        logger.warning("入队 submit 通知失败 (不影响提交)", exc_info=True)
+
     # 记录 IP 提交（用于频率限制）
     await record_ip_submission(ip_address, code)
     

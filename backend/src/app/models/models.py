@@ -110,6 +110,9 @@ class Submission(Base):
     token: Mapped[Optional[str]] = mapped_column(String(43), unique=True, index=True, nullable=True)
     # 注册码领取时间: 非空即"已领取"。每个提交仅放码一次, 防重放/重复签发; null=未领取。
     code_issued_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # 该 QQ 提交时是否在审核群: True=在, False=不在(面板标记"未在审核群"), None=未知/未检查。
+    # 由 bot 处理 submit 通知后回填 (get_group_member_info 结果)。
+    in_review_group: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     # 关系
     survey: Mapped["Survey"] = relationship("Survey", back_populates="submissions")
@@ -180,6 +183,24 @@ class ActivityLog(Base):
     
     # 备注
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
+
     # 时间戳
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+
+
+class BotNotification(Base):
+    """待 QQ 机器人发送的审核群通知队列 (插件轮询消费)。
+
+    提交/审核时入队一条; NapCat 插件轮询 /internal/notifications 取 pending,
+    在审核群 @ 对应 QQ 后回调 ack 置 done。submit 类型的 ack 会回填 Submission.in_review_group。
+    """
+    __tablename__ = "bot_notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    submission_id: Mapped[int] = mapped_column(ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False)
+    qq: Mapped[str] = mapped_column(String(20), nullable=False)  # 通知目标 QQ (问卷填写的, 已校验纯数字)
+    type: Mapped[str] = mapped_column(String(20), nullable=False)  # submit / approved / rejected
+    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # rejected 时的审核备注
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)  # pending / done
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, index=True)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

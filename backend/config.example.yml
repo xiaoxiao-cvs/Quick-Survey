@@ -27,6 +27,11 @@ mod:
   # mod 的 API Token (对应 Java 端 config.yml 的 api-token), 作 X-API-Key 头发送
   api_key: ""
 
+# 内部接口鉴权 (供 NapCat 插件调用: 查过审 QQ、轮询审核群通知队列)
+internal:
+  # 共享 token, 必须与 NapCat 插件配置一致; 留空则内部接口拒绝所有请求
+  token: ""
+
 # 文件上传配置
 upload:
   # 上传文件存储目录

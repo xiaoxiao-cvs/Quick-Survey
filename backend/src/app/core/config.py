@@ -29,6 +29,12 @@ class ModSettings(BaseSettings):
     api_key: str = ""
 
 
+class InternalSettings(BaseSettings):
+    """内部接口鉴权 (供 NapCat 插件调用: 查过审 QQ、轮询审核群通知队列)。"""
+    # 共享 token, 与 NapCat 插件配置一致; 走 X-Internal-Token 头常量时间比对。留空则内部接口拒绝所有请求。
+    token: str = ""
+
+
 class UploadSettings(BaseSettings):
     path: str = "./uploads"
     allowed_types: list[str] = ["image/jpeg", "image/png", "image/gif", "image/webp"]
@@ -81,6 +87,7 @@ class Settings(BaseSettings):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     mod: ModSettings = Field(default_factory=ModSettings)
+    internal: InternalSettings = Field(default_factory=InternalSettings)
     upload: UploadSettings = Field(default_factory=UploadSettings)
     cors: CorsSettings = Field(default_factory=CorsSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
@@ -108,6 +115,7 @@ def load_config() -> Settings:
             database=DatabaseSettings(**config_data.get("database", {})),
             auth=AuthSettings(**config_data.get("auth", {})),
             mod=ModSettings(**config_data.get("mod", {})),
+            internal=InternalSettings(**config_data.get("internal", {})),
             upload=UploadSettings(**config_data.get("upload", {})),
             cors=CorsSettings(**config_data.get("cors", {})),
             security=security_settings,

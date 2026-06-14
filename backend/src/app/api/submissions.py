@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,8 +7,11 @@ from app.db import get_db
 from app.core import get_current_user, CurrentUser
 from app.schemas import ApiResponse, SubmissionReview
 from app.services import SubmissionService, SurveyService, CleanupService, ActivityService
+from app.services import bot_notify
 from app.services.ip_location import lookup as resolve_ip_location
 from app.models import Question
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/submissions", tags=["提交管理"])
@@ -91,6 +95,7 @@ async def get_submissions(
             "player_name": sub.player_name,
             "qq": sub.qq,
             "status": sub.status,
+            "in_review_group": sub.in_review_group,  # True/False/null, 面板标记"未在审核群"
             "created_at": sub.created_at.isoformat(),
             "reviewed_at": sub.reviewed_at.isoformat() if sub.reviewed_at else None,
         })
@@ -175,7 +180,7 @@ async def review_submission(
     
     player_name = submission.player_name
     submission = await SubmissionService.review_submission(db, submission, data, user.id)
-    
+
     # 记录活动日志
     await ActivityService.log_review(
         db,
@@ -185,6 +190,15 @@ async def review_submission(
         operator=user.username,
         note=data.review_note,
     )
+
+    # 入队审核群通知 (尽力而为: 入队失败不影响审核结果)
+    try:
+        if data.status == "approved":
+            await bot_notify.enqueue(db, submission, bot_notify.APPROVED)
+        else:
+            await bot_notify.enqueue(db, submission, bot_notify.REJECTED, reason=data.review_note)
+    except Exception:
+        logger.warning("入队审核通知失败 (不影响审核)", exc_info=True)
     
     return ApiResponse(
         success=True,

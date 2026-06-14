@@ -6,6 +6,7 @@ from app.db import get_db
 from app.core import get_current_user, CurrentUser
 from app.schemas import ApiResponse, SubmissionReview
 from app.services import SubmissionService, SurveyService, CleanupService, ActivityService
+from app.services.ip_location import lookup as resolve_ip_location
 from app.models import Question
 
 
@@ -144,6 +145,7 @@ async def get_submission(
             "player_name": submission.player_name,
             "qq": submission.qq,
             "ip_address": submission.ip_address,
+            "ip_location": resolve_ip_location(submission.ip_address),  # 离线 ip2region 解析, 无数据则 null
             "fill_duration": submission.fill_duration,  # 填写耗时
             "first_viewed_at": submission.first_viewed_at.isoformat() if submission.first_viewed_at else None,  # 首次查看时间
             "status": submission.status,

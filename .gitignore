@@ -43,6 +43,9 @@ backend/uploads/
 # Rate limit data (contains IP records)
 data/rate_limit.json
 
+# IP 归属地离线库 (ip2region v4 xdb, ~10MB 二进制, 部署时单独提供, 不入 git)
+backend/src/app/resources/*.xdb
+
 # Testing
 .pytest_cache/
 .coverage

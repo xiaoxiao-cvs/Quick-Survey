@@ -2,7 +2,7 @@ import secrets
 import random
 from typing import Optional
 from datetime import datetime, timezone
-from sqlalchemy import select, func, delete, String, and_
+from sqlalchemy import select, func, delete, String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -271,6 +271,8 @@ class SubmissionService:
             ip_address=ip_address,
             fill_duration=fill_duration,
             status="pending",
+            # 不可枚举自助凭据: 256 bit 随机, 碰撞概率可忽略。万一撞唯一索引由异常自然冒泡, 不静默吞。
+            token=secrets.token_urlsafe(32),
         )
         
         # 添加答案
@@ -401,55 +403,49 @@ class SubmissionService:
         return sorted(questions, key=lambda q: q.order)
     
     @staticmethod
-    async def query_submissions_public(
+    async def get_submission_by_token(
         db: AsyncSession,
-        player_name: Optional[str] = None,
-        qq: Optional[str] = None,
-        limit: int = 10,
-    ) -> list[Submission]:
+        token: str,
+    ) -> Optional[Submission]:
         """
-        公开查询提交记录（用于玩家查询自己的问卷状态）
-        
-        Args:
-            db: 数据库会话
-            player_name: 游戏名称（精确匹配）
-            qq: QQ号（在答案中搜索）
-            limit: 最大返回数量
-        
-        Returns:
-            匹配的提交记录列表
+        按自助凭据 token 精确查询单条提交 (玩家查询审核进度 / 领码的统一入口)。
+
+        取代旧的按明文玩家名/QQ 查询: 后者无凭据、可枚举他人状态。token 不可枚举,
+        只有提交者本人 (或其浏览器 localStorage) 持有, 故只放行精确命中的单条。
         """
-        results = []
-        
-        # 1. 按玩家名精确匹配
-        if player_name:
-            query = (
-                select(Submission)
-                .options(selectinload(Submission.survey))
-                .where(Submission.player_name == player_name)
-                .order_by(Submission.created_at.desc())
-                .limit(limit)
-            )
-            result = await db.execute(query)
-            results.extend(result.scalars().all())
-        
-        # 2. 按 QQ 号精确匹配 (结构化 Submission.qq 列, 替代旧的 Answer.content LIKE 模糊搜, 避免误伤)
-        if qq and len(results) < limit:
-            remaining = limit - len(results)
-            existing_ids = {s.id for s in results}
-            query = (
-                select(Submission)
-                .options(selectinload(Submission.survey))
-                .where(
-                    and_(
-                        Submission.qq == qq,
-                        Submission.id.notin_(existing_ids) if existing_ids else True
-                    )
-                )
-                .order_by(Submission.created_at.desc())
-                .limit(remaining)
-            )
-            result = await db.execute(query)
-            results.extend(result.scalars().all())
-        
-        return results
+        if not token:
+            return None
+        result = await db.execute(
+            select(Submission)
+            .options(selectinload(Submission.survey))
+            .where(Submission.token == token)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def issue_registration_code(
+        db: AsyncSession,
+        submission: Submission,
+        code_provider,
+    ) -> tuple[str, Optional[dict]]:
+        """
+        领取注册码的状态机 (权威闸门集中在此, 端点只做 IP 限流 + HTTP 映射)。
+
+        - status != approved        -> ("not_approved", None): 未过审不放码, 否则人工审核形同虚设。
+        - 已领取 (code_issued_at 非空) -> ("already_issued", None): 每提交仅放码一次, 不重复向 mod 取码。
+        - 否则                       -> ("ok", code_provider 返回的码数据), 并标记 code_issued_at。
+
+        code_provider: async (player_name) -> dict (向 mod 取码, 失败时自行抛出由上层冒泡)。
+        注: 先取码再标记, 取码失败不会误标"已领取"; 并发双击的罕见竞态由前端禁用按钮兜底。
+        """
+        if submission.status != "approved":
+            return "not_approved", None
+        if submission.code_issued_at is not None:
+            return "already_issued", None
+
+        code_data = await code_provider(submission.player_name)
+
+        submission.code_issued_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(submission)
+        return "ok", code_data

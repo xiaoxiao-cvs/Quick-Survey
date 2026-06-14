@@ -21,6 +21,14 @@ class AuthSettings(BaseSettings):
     jwt_secret: str = ""
 
 
+class ModSettings(BaseSettings):
+    """Convenient-access mod 后端对接配置 (玩家凭 token 自助领码时, 问卷后端以服务端身份调 mod)。"""
+    # mod API 基址, 形如 https://api.mcwok.cn:22222 (不含末尾斜杠); 留空则领码功能不可用。
+    api_base: str = ""
+    # mod 的 API Token (对应 mod 配置 api-token), 作 X-API-Key 头发送。
+    api_key: str = ""
+
+
 class UploadSettings(BaseSettings):
     path: str = "./uploads"
     allowed_types: list[str] = ["image/jpeg", "image/png", "image/gif", "image/webp"]
@@ -72,6 +80,7 @@ class Settings(BaseSettings):
     server: ServerSettings = Field(default_factory=ServerSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
+    mod: ModSettings = Field(default_factory=ModSettings)
     upload: UploadSettings = Field(default_factory=UploadSettings)
     cors: CorsSettings = Field(default_factory=CorsSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
@@ -98,6 +107,7 @@ def load_config() -> Settings:
             server=ServerSettings(**config_data.get("server", {})),
             database=DatabaseSettings(**config_data.get("database", {})),
             auth=AuthSettings(**config_data.get("auth", {})),
+            mod=ModSettings(**config_data.get("mod", {})),
             upload=UploadSettings(**config_data.get("upload", {})),
             cors=CorsSettings(**config_data.get("cors", {})),
             security=security_settings,

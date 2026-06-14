@@ -103,7 +103,14 @@ class Submission(Base):
     
     # 时间戳
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)  # 提交时间
-    
+
+    # 自助查询/领码凭据: 提交时生成的不可枚举随机串 (secrets.token_urlsafe(32) -> 43 字符)。
+    # 玩家凭此 token (而非可枚举的自增 id 或明文玩家名) 查询审核进度, 并在通过后自助领取注册码。
+    # nullable: 本列引入前的历史提交无 token, 不可自助 (符合预期)。
+    token: Mapped[Optional[str]] = mapped_column(String(43), unique=True, index=True, nullable=True)
+    # 注册码领取时间: 非空即"已领取"。每个提交仅放码一次, 防重放/重复签发; null=未领取。
+    code_issued_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
     # 关系
     survey: Mapped["Survey"] = relationship("Survey", back_populates="submissions")
     answers: Mapped[list["Answer"]] = relationship("Answer", back_populates="submission", cascade="all, delete-orphan")

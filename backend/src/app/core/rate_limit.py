@@ -15,10 +15,14 @@ from app.core.config import get_settings
 # JSON 文件路径
 RATE_LIMIT_FILE = Path("data/rate_limit.json")
 
+# 领码端点每 IP 每日上限: token 不可枚举, 此限流主要防滥用/DoS, 取较宽松值容忍同一浏览器多份提交的合法重试。
+MAX_REGCODE_ATTEMPTS_PER_DAY = 30
+
 # 内存缓存
 _cache: dict = {
     "submissions": {},  # {ip: [(timestamp, survey_code), ...]}
     "uploads": {},      # {ip: [timestamp, ...]}
+    "regcodes": {},     # {ip: [timestamp, ...]}
 }
 _cache_dirty = False
 _lock = asyncio.Lock()
@@ -222,6 +226,63 @@ async def record_ip_upload(ip: Optional[str]) -> None:
         ip_records.append(now)
         _cache["uploads"][ip] = ip_records
         
+        _cache_dirty = True
+        await _save_if_dirty()
+
+
+async def check_regcode_rate_limit(ip: Optional[str]) -> None:
+    """
+    检查领码端点的 IP 频率限制 (独立于提交/上传)。
+
+    领码端点不走提交的 Turnstile/时间检测三连, 故单独加 IP 限流防滥用。
+
+    Raises:
+        HTTPException: 超过限制时抛出
+    """
+    settings = get_settings()
+
+    if not settings.security.rate_limit.enabled:
+        return
+
+    if not ip:
+        return
+
+    async with _lock:
+        await _ensure_loaded()
+
+        now = datetime.now(timezone.utc).timestamp()
+        one_day_ago = now - 86400
+
+        regcodes = _cache.get("regcodes", {})
+        ip_records = [ts for ts in regcodes.get(ip, []) if ts > one_day_ago]
+
+        if len(ip_records) >= MAX_REGCODE_ATTEMPTS_PER_DAY:
+            raise HTTPException(
+                status_code=429,
+                detail=f"领码过于频繁, 每个 IP 每天最多 {MAX_REGCODE_ATTEMPTS_PER_DAY} 次, 请稍后再试"
+            )
+
+
+async def record_regcode_attempt(ip: Optional[str]) -> None:
+    """记录一次领码尝试 (无论成功与否, 在领码端点入口处调用)。"""
+    global _cache_dirty
+
+    if not ip:
+        return
+
+    async with _lock:
+        await _ensure_loaded()
+
+        now = datetime.now(timezone.utc).timestamp()
+        one_day_ago = now - 86400
+
+        if "regcodes" not in _cache:
+            _cache["regcodes"] = {}
+
+        ip_records = [ts for ts in _cache["regcodes"].get(ip, []) if ts > one_day_ago]
+        ip_records.append(now)
+        _cache["regcodes"][ip] = ip_records
+
         _cache_dirty = True
         await _save_if_dirty()
 

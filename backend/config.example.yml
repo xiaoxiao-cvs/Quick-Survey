@@ -20,6 +20,13 @@ auth:
   # 否则面板登录后调问卷管理端会全部 401
   jwt_secret: "your-jwt-secret-here"
 
+# Convenient-access mod 后端对接 (玩家凭 token 自助领取注册码时, 问卷后端以服务端身份调 mod)
+mod:
+  # mod API 基址, 形如 https://api.mcwok.cn:22222 (不含末尾斜杠); 留空则领码功能返回 503
+  api_base: ""
+  # mod 的 API Token (对应 Java 端 config.yml 的 api-token), 作 X-API-Key 头发送
+  api_key: ""
+
 # 文件上传配置
 upload:
   # 上传文件存储目录

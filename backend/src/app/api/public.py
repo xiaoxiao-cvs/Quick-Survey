@@ -1,16 +1,18 @@
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.schemas import ApiResponse, SubmissionCreate, PublicSurveyResponse
 from app.services import SurveyService, SubmissionService, FileService, ActivityService
+from app.services.mod_client import issue_registration_code as mod_issue_registration_code
 from app.core import (
     verify_turnstile,
     check_ip_rate_limit,
     record_ip_submission,
     check_upload_rate_limit,
     record_ip_upload,
+    check_regcode_rate_limit,
+    record_regcode_attempt,
     check_submit_time,
     get_real_ip,
     get_security_config,
@@ -289,6 +291,8 @@ async def submit_survey(
         success=True,
         data={
             "id": submission.id,
+            # 自助凭据: 玩家需妥善保存, 凭此查询进度并在通过后领取注册码
+            "token": submission.token,
             "message": "提交成功，请等待审核",
         }
     )
@@ -322,73 +326,103 @@ async def upload_file(
     )
 
 
+def _submission_status_dict(sub) -> dict:
+    """把一条提交序列化为玩家可见的状态字典 (查询进度用)。明文码不在此出现。"""
+    status_text = {
+        "pending": "待审核",
+        "approved": "已通过",
+        "rejected": "未通过",
+    }.get(sub.status, "未知")
+    code_issued = sub.code_issued_at is not None
+    return {
+        "id": sub.id,
+        "token": sub.token,
+        "player_name": sub.player_name,
+        "status": sub.status,
+        "status_text": status_text,
+        # 时间线
+        "timeline": {
+            "submitted_at": sub.created_at.isoformat() if sub.created_at else None,
+            "first_viewed_at": sub.first_viewed_at.isoformat() if sub.first_viewed_at else None,
+            "reviewed_at": sub.reviewed_at.isoformat() if sub.reviewed_at else None,
+        },
+        # 填写耗时（格式化为分:秒）
+        "fill_duration": _format_duration(sub.fill_duration) if sub.fill_duration else None,
+        # 审核备注（仅在被拒绝时显示）
+        "review_note": sub.review_note if sub.status == "rejected" else None,
+        # 问卷标题
+        "survey_title": sub.survey.title if sub.survey else None,
+        # 领码状态: 已领取 / 可领取 (通过且未领)
+        "code_issued": code_issued,
+        "can_get_code": sub.status == "approved" and not code_issued,
+    }
+
+
 @router.get("/submissions/query", response_model=ApiResponse)
 async def query_submission_status(
-    player_name: Optional[str] = Query(None, min_length=1, max_length=64, description="游戏名称"),
-    qq: Optional[str] = Query(None, min_length=5, max_length=15, description="QQ号"),
+    token: str = Query(..., min_length=20, max_length=64, description="提交凭据 (提交成功后获得)"),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    查询问卷提交状态（公开接口）
-    
-    根据游戏名或 QQ 号查询问卷状态，返回审核进度时间线：
-    - 提交时间
-    - 管理员首次查看时间
-    - 审核通过/拒绝时间
-    - 是否已加入白名单（如果通过）
+    凭 token 查询单条提交的审核进度（公开接口）。
+
+    取代旧的按明文玩家名/QQ 查询: token 不可枚举且仅提交者本人持有,
+    杜绝任何人凭他人玩家名探测其审核状态。返回审核进度时间线与领码状态。
     """
-    if not player_name and not qq:
-        raise HTTPException(
-            status_code=400, 
-            detail="请提供游戏名称或QQ号进行查询"
-        )
-    
-    # 查询提交记录
-    submissions = await SubmissionService.query_submissions_public(
-        db, player_name=player_name, qq=qq
+    submission = await SubmissionService.get_submission_by_token(db, token)
+    if not submission:
+        raise HTTPException(status_code=404, detail="凭据无效或未找到对应的问卷提交")
+
+    return ApiResponse(
+        success=True,
+        data={"submission": _submission_status_dict(submission)},
     )
-    
-    if not submissions:
-        raise HTTPException(
-            status_code=404, 
-            detail="未找到相关的问卷提交记录"
-        )
-    
-    # 构建返回数据
-    results = []
-    for sub in submissions:
-        # 计算状态文本
-        status_text = {
-            "pending": "待审核",
-            "approved": "已通过",
-            "rejected": "未通过",
-        }.get(sub.status, "未知")
-        
-        results.append({
-            "id": sub.id,
-            "player_name": sub.player_name,
-            "status": sub.status,
-            "status_text": status_text,
-            # 时间线
-            "timeline": {
-                "submitted_at": sub.created_at.isoformat() if sub.created_at else None,
-                "first_viewed_at": sub.first_viewed_at.isoformat() if sub.first_viewed_at else None,
-                "reviewed_at": sub.reviewed_at.isoformat() if sub.reviewed_at else None,
+
+
+@router.post("/submissions/{token}/registration-code", response_model=ApiResponse)
+async def redeem_registration_code(
+    token: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    凭 token 自助领取注册码（公开接口, 独立 IP 限流）。
+
+    仅当提交已审核通过且未领取过才放码: 调 mod 为该玩家名签发一次性注册码并标记已领取。
+    每个提交仅放码一次; 未过审 / 已领取分别返回明确状态, 过期由玩家联系管理员补发。
+    """
+    ip_address = get_real_ip(request)
+    await check_regcode_rate_limit(ip_address)
+    await record_regcode_attempt(ip_address)
+
+    submission = await SubmissionService.get_submission_by_token(db, token)
+    if not submission:
+        raise HTTPException(status_code=404, detail="凭据无效或未找到对应的问卷提交")
+
+    status, code_data = await SubmissionService.issue_registration_code(
+        db, submission, mod_issue_registration_code
+    )
+
+    if status == "not_approved":
+        raise HTTPException(status_code=409, detail="问卷尚未通过审核, 暂不能领取注册码")
+
+    if status == "already_issued":
+        return ApiResponse(
+            success=True,
+            data={
+                "already_issued": True,
+                "message": "该问卷的注册码已领取过。如遗失或已过期, 请联系管理员补发。",
             },
-            # 填写耗时（格式化为分:秒）
-            "fill_duration": _format_duration(sub.fill_duration) if sub.fill_duration else None,
-            # 审核备注（仅在被拒绝时显示）
-            "review_note": sub.review_note if sub.status == "rejected" else None,
-            # 问卷标题
-            "survey_title": sub.survey.title if sub.survey else None,
-        })
-    
+        )
+
+    # status == "ok": 明文码仅在此响应出现, 严禁写日志
     return ApiResponse(
         success=True,
         data={
-            "count": len(results),
-            "submissions": results,
-        }
+            "registration_code": code_data["registration_code"],
+            "code_expires_minutes": code_data.get("code_expires_minutes"),
+            "message": "注册码已生成, 请在游戏内使用 /register 完成注册。",
+        },
     )
 
 

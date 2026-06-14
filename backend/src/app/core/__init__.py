@@ -14,6 +14,7 @@ from app.core.rate_limit import (
     record_ip_upload,
     check_regcode_rate_limit,
     record_regcode_attempt,
+    check_query_rate_limit,
 )
 
 __all__ = [
@@ -31,6 +32,7 @@ __all__ = [
     "record_ip_upload",
     "check_regcode_rate_limit",
     "record_regcode_attempt",
+    "check_query_rate_limit",
     "check_submit_time",
     "get_real_ip",
     "get_security_config",

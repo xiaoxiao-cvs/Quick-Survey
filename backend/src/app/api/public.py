@@ -13,6 +13,7 @@ from app.core import (
     record_ip_upload,
     check_regcode_rate_limit,
     record_regcode_attempt,
+    check_query_rate_limit,
     check_submit_time,
     get_real_ip,
     get_security_config,
@@ -360,6 +361,7 @@ def _submission_status_dict(sub) -> dict:
 
 @router.get("/submissions/query", response_model=ApiResponse)
 async def query_submission_status(
+    request: Request,
     token: str = Query(..., min_length=20, max_length=64, description="提交凭据 (提交成功后获得)"),
     db: AsyncSession = Depends(get_db),
 ):
@@ -369,6 +371,9 @@ async def query_submission_status(
     取代旧的按明文玩家名/QQ 查询: token 不可枚举且仅提交者本人持有,
     杜绝任何人凭他人玩家名探测其审核状态。返回审核进度时间线与领码状态。
     """
+    # 独立 IP 限流 (per-minute): token 不可枚举无需防爆破, 仅防随机 token 狂刷
+    await check_query_rate_limit(get_real_ip(request))
+
     submission = await SubmissionService.get_submission_by_token(db, token)
     if not submission:
         raise HTTPException(status_code=404, detail="凭据无效或未找到对应的问卷提交")

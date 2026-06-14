@@ -18,12 +18,19 @@ RATE_LIMIT_FILE = Path("data/rate_limit.json")
 # 领码端点每 IP 每日上限: token 不可枚举, 此限流主要防滥用/DoS, 取较宽松值容忍同一浏览器多份提交的合法重试。
 MAX_REGCODE_ATTEMPTS_PER_DAY = 30
 
+# 查询端点每 IP 每分钟上限: token 不可枚举, 此限流仅防随机 token 狂刷; 查询页打开会按本机
+# 每个 token 各查一次, 故按分钟给较宽松额度。
+MAX_QUERY_PER_MINUTE = 30
+
 # 内存缓存
 _cache: dict = {
     "submissions": {},  # {ip: [(timestamp, survey_code), ...]}
     "uploads": {},      # {ip: [timestamp, ...]}
     "regcodes": {},     # {ip: [timestamp, ...]}
 }
+
+# 查询端点的 per-IP per-minute 时间戳, 纯内存不落盘 (突发防护无需持久化, 与上面持久化的 _cache 分开)
+_query_hits: dict = {}
 _cache_dirty = False
 _lock = asyncio.Lock()
 
@@ -285,6 +292,36 @@ async def record_regcode_attempt(ip: Optional[str]) -> None:
 
         _cache_dirty = True
         await _save_if_dirty()
+
+
+async def check_query_rate_limit(ip: Optional[str]) -> None:
+    """
+    查询提交状态端点的 per-IP per-minute 限流 (纯内存突发防护)。
+
+    token 不可枚举, 故无需防爆破; 仅防随机 token 狂刷查询。记录本次访问, 超限抛 429。
+
+    Raises:
+        HTTPException: 超过限制时抛出
+    """
+    settings = get_settings()
+
+    if not settings.security.rate_limit.enabled:
+        return
+
+    if not ip:
+        return
+
+    async with _lock:
+        now = datetime.now(timezone.utc).timestamp()
+        recs = [ts for ts in _query_hits.get(ip, []) if ts > now - 60]
+        if len(recs) >= MAX_QUERY_PER_MINUTE:
+            _query_hits[ip] = recs
+            raise HTTPException(
+                status_code=429,
+                detail="查询过于频繁, 请稍候再试"
+            )
+        recs.append(now)
+        _query_hits[ip] = recs
 
 
 async def get_rate_limit_stats() -> dict:

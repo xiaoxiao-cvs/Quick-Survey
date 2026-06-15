@@ -198,6 +198,7 @@ async def review_submission(
         else:
             await bot_notify.enqueue(db, submission, bot_notify.REJECTED, reason=data.review_note)
     except Exception:
+        await db.rollback()  # 清掉入队失败的脏会话 (尽力而为, 不影响审核结果)
         logger.warning("入队审核通知失败 (不影响审核)", exc_info=True)
     
     return ApiResponse(

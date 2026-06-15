@@ -24,7 +24,12 @@ async def require_internal_token(
 ):
     """X-Internal-Token 常量时间比对。token 未配置或不匹配一律 401 (fail-closed)。"""
     token = get_settings().internal.token
-    if not token or not x_internal_token or not secrets.compare_digest(x_internal_token, token):
+    # 转 bytes 比较: compare_digest 对含非 ASCII 的 str 会抛 TypeError -> 500; bytes 恒安全且常量时间
+    if (
+        not token
+        or not x_internal_token
+        or not secrets.compare_digest(x_internal_token.encode("utf-8"), token.encode("utf-8"))
+    ):
         raise HTTPException(status_code=401, detail="无效的内部凭证")
 
 
@@ -46,13 +51,8 @@ async def check_approved(
 ):
     """该 QQ 是否有已过审提交 (主群加群申请自动准入判定)。"""
     submission = await SubmissionService.get_approved_by_qq(db, qq)
-    return ApiResponse(
-        success=True,
-        data={
-            "approved": submission is not None,
-            "player_name": submission.player_name if submission else None,
-        },
-    )
+    # 最小披露: 只回布尔 (插件仅需此判定); 不回 player_name, 避免内部端点成为 QQ->真实玩家名 oracle
+    return ApiResponse(success=True, data={"approved": submission is not None})
 
 
 @router.get("/notifications", response_model=ApiResponse)

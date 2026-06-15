@@ -277,9 +277,9 @@ async def submit_survey(
             detail="缺少玩家名: 请填写玩家名 (或在问卷中配置一道标记为玩家名的题)"
         )
 
-    # QQ 若填写须为纯数字 (机器人按 QQ @ 通知/主群准入, 非数字无意义且会误伤)
-    if role_qq and not role_qq.isdigit():
-        raise HTTPException(status_code=400, detail="QQ号需为纯数字")
+    # QQ 若填写须为纯数字且长度合法 (机器人按 QQ @ 通知/主群准入; 上限 15 宽于真实 QQ、严于列宽 String(20))
+    if role_qq and (not role_qq.isdigit() or len(role_qq) > 15):
+        raise HTTPException(status_code=400, detail="QQ号需为纯数字且长度合法")
 
     # 创建提交（包含填写耗时 + 按 role 抽取的玩家名/QQ）
     submission = await SubmissionService.create_submission(
@@ -294,6 +294,7 @@ async def submit_survey(
     try:
         await bot_notify.enqueue(db, submission, bot_notify.SUBMIT)
     except Exception:
+        await db.rollback()  # 清掉入队失败的脏会话, 不污染后续 (尽力而为, 不影响提交)
         logger.warning("入队 submit 通知失败 (不影响提交)", exc_info=True)
 
     # 记录 IP 提交（用于频率限制）

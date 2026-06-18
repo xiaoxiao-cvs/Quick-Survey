@@ -24,7 +24,7 @@ async def run_cleanup(
 ):
     """
     手动触发清理任务
-    清理已审核提交的答案数据和图片文件，保留提交记录元数据
+    清理已审核提交的图片文件，保留提交记录元数据与答案文本内容
     """
     stats = await CleanupService.run_cleanup()
     
@@ -41,7 +41,7 @@ async def run_cleanup(
         success=True,
         data={
             "submissions_cleaned": stats["submissions_cleaned"],
-            "answers_deleted": stats["answers_deleted"],
+            "images_cleared": stats["images_cleared"],
             "files_deleted": stats["files_deleted"],
             "orphan_files_deleted": stats["orphan_files_deleted"],
             "space_freed": freed_str,

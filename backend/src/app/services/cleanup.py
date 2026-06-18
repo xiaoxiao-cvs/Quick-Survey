@@ -1,10 +1,12 @@
 """
-定时清理服务 - 清理已审核的问卷答案和图片文件
-保留提交记录的元数据（状态、审核时间等）用于日志查询
+定时清理服务 - 清理已审核提交的图片文件, 释放磁盘
+保留提交记录元数据与答案文本内容（单选/多选/文本/判断）用于日志与审计查询,
+仅删除答案引用的图片文件并清空其图片引用; uploaded_files 记录及磁盘文件一并清理。
 """
 
 import os
 import asyncio
+import logging
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
@@ -17,6 +19,8 @@ from app.db import async_session_maker
 from app.models import Submission, Answer, UploadedFile
 from app.core.config import get_settings
 
+logger = logging.getLogger(__name__)
+
 
 class CleanupService:
     """清理服务"""
@@ -27,26 +31,26 @@ class CleanupService:
     @classmethod
     async def cleanup_reviewed_submissions(cls, db: AsyncSession) -> dict:
         """
-        清理已审核的提交数据
-        
+        清理已审核提交的图片, 保留答案文本记录。
+
         保留:
-        - submissions 表的记录（元数据：状态、审核时间、审核备注等）
-        
+        - submissions 表记录（元数据：状态、审核时间、审核备注等）
+        - answers 表记录（填写内容：单选/多选/文本/判断），仅清空其中的图片引用
+
         删除:
-        - answers 表中的答案数据
-        - uploaded_files 表中的文件记录
-        - uploads/ 目录中的实际图片文件
+        - answers.content.images 指向的 uploads/ 图片文件, 并把该答案的 images 置空
+        - uploaded_files 表中的文件记录及其磁盘文件
         """
         settings = get_settings()
         upload_dir = Path(settings.upload.path)
-        
+
         stats = {
             "submissions_cleaned": 0,
-            "answers_deleted": 0,
+            "images_cleared": 0,
             "files_deleted": 0,
             "bytes_freed": 0,
         }
-        
+
         # 查找已审核的提交（状态为 approved 或 rejected）
         # 使用 selectinload 预加载 answers 关系，避免异步懒加载问题
         query = select(Submission).options(
@@ -59,39 +63,41 @@ class CleanupService:
         )
         result = await db.execute(query)
         submissions = result.scalars().all()
-        
+
         for submission in submissions:
-            # 检查是否还有答案（可能已经被清理过）
-            if not submission.answers:
-                continue
-            
-            # 收集需要删除的图片文件
+            submission_touched = False
+
             for answer in submission.answers:
                 content = answer.content or {}
                 images = content.get("images", [])
-                
+                # 已清理过(或非图片题)的答案没有图片引用, 跳过 -> 任务对已处理提交幂等
+                if not images:
+                    continue
+
                 for image_path in images:
                     # 图片路径格式: /uploads/xxx.jpg
                     filename = image_path.replace("/uploads/", "")
                     file_path = upload_dir / filename
-                    
+
                     if file_path.exists():
                         try:
                             file_size = file_path.stat().st_size
                             os.remove(file_path)
                             stats["files_deleted"] += 1
                             stats["bytes_freed"] += file_size
-                        except Exception as e:
-                            print(f"[Cleanup] 删除文件失败: {file_path}, 错误: {e}")
-            
-            # 删除答案记录
-            answers_count = len(submission.answers)
-            for answer in list(submission.answers):
-                await db.delete(answer)
-            
-            stats["answers_deleted"] += answers_count
-            stats["submissions_cleaned"] += 1
-        
+                        except Exception:
+                            logger.exception("[Cleanup] 删除答案附图失败: %s", file_path)
+
+                # 清空图片引用但保留答案行。JSON 列须整体重新赋值, SQLAlchemy 才会标记为脏并落库。
+                new_content = dict(content)
+                new_content["images"] = []
+                answer.content = new_content
+                stats["images_cleared"] += len(images)
+                submission_touched = True
+
+            if submission_touched:
+                stats["submissions_cleaned"] += 1
+
         # 删除关联的上传文件记录
         file_query = select(UploadedFile).where(
             UploadedFile.submission_id.in_([s.id for s in submissions])
@@ -109,7 +115,7 @@ class CleanupService:
                     stats["files_deleted"] += 1
                     stats["bytes_freed"] += file_size
                 except Exception:
-                    pass
+                    logger.exception("[Cleanup] 删除已记录上传文件失败: %s", file_path)
             await db.delete(uploaded_file)
         
         await db.commit()
@@ -186,7 +192,7 @@ class CleanupService:
         
         total_stats = {
             "submissions_cleaned": 0,
-            "answers_deleted": 0,
+            "images_cleared": 0,
             "files_deleted": 0,
             "orphan_files_deleted": 0,
             "bytes_freed": 0,
@@ -215,7 +221,7 @@ class CleanupService:
             
             print(f"[Cleanup] 清理完成:")
             print(f"  - 清理提交: {total_stats['submissions_cleaned']}")
-            print(f"  - 删除答案: {total_stats['answers_deleted']}")
+            print(f"  - 清空图片引用: {total_stats['images_cleared']}")
             print(f"  - 删除文件: {total_stats['files_deleted']}")
             print(f"  - 孤立文件: {total_stats['orphan_files_deleted']}")
             print(f"  - 释放空间: {freed_str}")

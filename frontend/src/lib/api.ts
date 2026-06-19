@@ -111,6 +111,8 @@ export async function uploadImage(file: File): Promise<UploadResponse> {
   try {
     const { data } = await http.post<ApiResponse<UploadResponse>>('/public/upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      // 上传走慢速移动网络, 覆盖全局 20s 超时 (压缩后通常很快, 留足余量防弱网中断)
+      timeout: 120000,
     })
     return unwrap(data, '上传失败，请重试')
   } catch (err) {

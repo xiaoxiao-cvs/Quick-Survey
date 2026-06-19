@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, X, Loader2, Image as ImageIcon, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { uploadImage, getImageUrl } from '@/lib/api'
+import { compressImage } from '@/lib/image-compress'
 import { toast } from 'sonner'
 
 interface ImageUploaderProps {
@@ -43,7 +44,8 @@ export function ImageUploader({ value, onChange, maxImages = 5 }: ImageUploaderP
 
     try {
       for (const file of filesToUpload) {
-        const result = await uploadImage(file)
+        const prepared = await compressImage(file)
+        const result = await uploadImage(prepared)
         uploadedUrls.push(result.url)
       }
       onChange([...value, ...uploadedUrls])

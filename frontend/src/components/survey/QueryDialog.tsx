@@ -39,6 +39,16 @@ export function QueryDialog({ open, onOpenChange }: QueryDialogProps) {
   // 每个 token 的领码结果 (明文码或已领取标记), 仅展示, 不持久化
   const [codes, setCodes] = useState<Record<string, RegistrationCodeResult>>({})
   const [redeeming, setRedeeming] = useState<Record<string, boolean>>({})
+  // 二次确认: 注册码一次性且仅 24H 有效, 领取前要求显式确认并设 3 秒冷却, 防手滑误领后过期作废
+  const [confirmToken, setConfirmToken] = useState<string | null>(null)
+  const [cooldown, setCooldown] = useState(0)
+
+  // 冷却倒计时: 进入二次确认后逐秒递减至 0, 期间确认按钮禁用
+  useEffect(() => {
+    if (confirmToken === null || cooldown <= 0) return
+    const timer = setTimeout(() => setCooldown((c) => c - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [confirmToken, cooldown])
 
   // 打开时自动回填本机记住的提交并查询其最新状态
   useEffect(() => {
@@ -79,21 +89,35 @@ export function QueryDialog({ open, onOpenChange }: QueryDialogProps) {
     }
   }, [token])
 
+  // 点击"领取注册码": 不直接领, 先进入二次确认并启动 3 秒冷却
+  const startConfirm = useCallback((token: string) => {
+    setConfirmToken(token)
+    setCooldown(3)
+  }, [])
+
+  const cancelConfirm = useCallback(() => {
+    setConfirmToken(null)
+    setCooldown(0)
+  }, [])
+
   const handleRedeem = useCallback(async (sub: SubmissionStatus) => {
     setRedeeming((prev) => ({ ...prev, [sub.token]: true }))
     try {
       const result = await redeemRegistrationCode(sub.token)
       setCodes((prev) => ({ ...prev, [sub.token]: result }))
-      // 领取后更新该条状态, 隐藏按钮
+      // 领取后更新该条状态, 隐藏按钮; 退出二次确认态
       setResults((prev) =>
         prev.map((s) =>
           s.token === sub.token ? { ...s, code_issued: true, can_get_code: false } : s,
         ),
       )
+      setConfirmToken(null)
+      setCooldown(0)
       if (result.registration_code) {
         toast.success('注册码已生成')
       }
     } catch (err) {
+      // 领取失败保留二次确认面板, 便于重试 (冷却已结束, 可直接再次确认)
       toast.error(err instanceof Error ? err.message : '领取失败，请稍后重试')
     } finally {
       setRedeeming((prev) => ({ ...prev, [sub.token]: false }))
@@ -124,6 +148,8 @@ export function QueryDialog({ open, onOpenChange }: QueryDialogProps) {
       setResults([])
       setCodes({})
       setRedeeming({})
+      setConfirmToken(null)
+      setCooldown(0)
     }, 200)
   }
 
@@ -252,18 +278,51 @@ export function QueryDialog({ open, onOpenChange }: QueryDialogProps) {
                         </div>
                       </div>
                     ) : submission.can_get_code ? (
-                      <Button
-                        onClick={() => handleRedeem(submission)}
-                        disabled={redeeming[submission.token]}
-                        className="mt-4 w-full rounded-xl"
-                      >
-                        {redeeming[submission.token] ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
+                      confirmToken === submission.token ? (
+                        <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/5 p-3 space-y-3">
+                          <div className="flex gap-2 text-xs text-muted-foreground">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-amber-500" />
+                            <p>
+                              注册码<span className="font-medium text-foreground">仅 24 小时内有效</span>，且为一次性使用。
+                              请确保你能在有效期内进服完成 <span className="font-mono">/register</span> 注册；
+                              若暂时无法及时进服，请<span className="font-medium text-foreground">不要现在领取</span>，
+                              以免过期失效需联系管理员补发。
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              onClick={cancelConfirm}
+                              disabled={redeeming[submission.token]}
+                              className="flex-1 rounded-xl"
+                            >
+                              取消
+                            </Button>
+                            <Button
+                              onClick={() => handleRedeem(submission)}
+                              disabled={cooldown > 0 || redeeming[submission.token]}
+                              className="flex-1 rounded-xl"
+                            >
+                              {redeeming[submission.token] ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : cooldown > 0 ? (
+                                `确认领取 (${cooldown})`
+                              ) : (
+                                '确认领取'
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          onClick={() => startConfirm(submission.token)}
+                          disabled={redeeming[submission.token]}
+                          className="mt-4 w-full rounded-xl"
+                        >
                           <KeyRound className="w-4 h-4" />
-                        )}
-                        领取注册码
-                      </Button>
+                          领取注册码
+                        </Button>
+                      )
                     ) : submission.code_issued ? (
                       <p className="mt-4 text-xs text-muted-foreground">
                         注册码已领取过。如遗失或已过期，请联系管理员补发。
